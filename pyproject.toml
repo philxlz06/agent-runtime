@@ -24,3 +24,5 @@ dev = [
     "pytest-asyncio>=1.4.1.post1",
 ]
 
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
