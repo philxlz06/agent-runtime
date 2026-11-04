@@ -15,6 +15,7 @@ def run_worker(run_id, log, crash_at=None):
     if crash_at:
         env["CRASH_AT"] = str(crash_at)
     return subprocess.run([sys.executable, str(SCRIPT), str(run_id)], env=env)
+#sys executable is the venv folder, str script is the crash workflow file to be ran
 
 
 @pytest.mark.asyncio
