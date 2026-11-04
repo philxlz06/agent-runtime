@@ -1,7 +1,7 @@
 import psycopg
 import pytest_asyncio
 
-DSN = "postgresql://runtime:runtime@localhost:5432/runtime"
+from agent_runtime.db import DSN
 
 
 @pytest_asyncio.fixture
