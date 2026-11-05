@@ -10,7 +10,8 @@ class RunContext:
     run_id: uuid.UUID
     conn: AsyncConnection | None = None
     seq: int = 0
-    in_step: bool = False  # True while a step is running
+    in_step: bool = False
+    step_key: str | None = None   # key of the step running right now
 
     def next_seq(self) -> int:
         self.seq += 1

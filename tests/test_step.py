@@ -4,7 +4,8 @@ import uuid
 import pytest
 
 from agent_runtime.context import RunContext, current_run
-from agent_runtime.step import ParallelStepError, step
+from agent_runtime.step import ParallelStepError, step, idempotency_key
+from fake_payments import refund
 
 calls = []
 
@@ -49,3 +50,20 @@ async def test_parallel_steps_are_rejected(conn):
     current_run.set(RunContext(run_id=run_id, conn=conn))
     with pytest.raises(ParallelStepError):
         await asyncio.gather(slow(1), slow(2))
+
+
+@step
+async def pay(amount):
+    return await refund(idempotency_key(), amount)
+
+
+@pytest.mark.asyncio
+async def test_step_passes_its_key_to_outside_api(conn):
+    run_id = await new_run(conn)
+    current_run.set(RunContext(run_id=run_id, conn=conn))
+
+    result = await pay(40)
+    assert result["refund_id"] == f"re_{run_id}:1"     # the service got key "run_id:1"
+
+    cur = await conn.execute("SELECT status FROM steps WHERE run_id = %s", (run_id,))
+    assert await cur.fetchall() == [("completed",)]   # one row, started → completed
