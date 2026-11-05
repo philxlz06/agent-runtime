@@ -55,6 +55,7 @@ async def test_parallel_steps_are_rejected(conn):
 @step
 async def pay(amount):
     return await refund(idempotency_key(), amount)
+    #call to stripe, with the key and amount
 
 
 @pytest.mark.asyncio
