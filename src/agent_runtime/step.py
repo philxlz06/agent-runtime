@@ -28,6 +28,7 @@ def step(fn):
         if ctx.in_step:
             raise ParallelStepError("steps must run one at a time (D20)")
         ctx.in_step = True
+        #made it true now just run the next
         try:
             seq = ctx.next_seq()
             name = fn.__name__
