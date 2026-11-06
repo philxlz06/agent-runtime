@@ -51,11 +51,10 @@ async def test_parallel_steps_are_rejected(conn):
     with pytest.raises(ParallelStepError):
         await asyncio.gather(slow(1), slow(2))
 
-
+#####
 @step
 async def pay(amount):
     return await refund(idempotency_key(), amount)
-    #call to stripe, with the key and amount
 
 
 @pytest.mark.asyncio
@@ -68,3 +67,5 @@ async def test_step_passes_its_key_to_outside_api(conn):
 
     cur = await conn.execute("SELECT status FROM steps WHERE run_id = %s", (run_id,))
     assert await cur.fetchall() == [("completed",)]   # one row, started → completed
+
+#####
