@@ -15,6 +15,7 @@ async def claim_run(conn, worker_id, lease_seconds=LEASE_SECONDS):
         WHERE id = (
             SELECT id FROM runs
             WHERE status = 'pending'
+                OR (status = 'running' AND lease_expires_at < now() )
             ORDER BY created_at
             FOR UPDATE SKIP LOCKED
             LIMIT 1
