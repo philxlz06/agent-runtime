@@ -82,3 +82,23 @@ async def test_heartbeat_keeps_lease_alive_then_it_expires(conn):
     assert not await lease_is_valid(conn, run_id)    # → the lease expired
 
 #m3
+
+
+#m3 4
+
+@pytest.mark.asyncio
+async def test_expired_run_gets_reclaimed(conn):
+    run_id = await start_run(conn, "double_twice", {"x": 1})
+
+    assert await claim_run(conn, "worker-0", lease_seconds=1) == run_id   # worker-0 takes it
+    assert await claim_run(conn, "worker-1") is None                       # still leased → nothing for worker-1
+
+    await asyncio.sleep(1.5)                                               # worker-0 "dies": no heartbeat
+    assert await claim_run(conn, "worker-1") == run_id                     # lease expired → worker-1 takes over
+
+    cur = await conn.execute("SELECT lease_owner FROM runs WHERE id = %s", (run_id,))
+    assert (await cur.fetchone())[0] == "worker-1"                         # the row now says worker-1
+    assert await renew_lease(conn, run_id, "worker-0") is False            # worker-0 lost it
+
+
+#m3 4
