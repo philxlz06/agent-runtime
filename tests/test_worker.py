@@ -3,7 +3,9 @@ import asyncio
 import psycopg
 import pytest
 
+from agent_runtime.context import RunContext, current_run
 from agent_runtime.db import DSN
+from agent_runtime.step import LeaseLostError, step
 from agent_runtime.worker import claim_run, heartbeat, renew_lease
 from agent_runtime.workflow import start_run
 
@@ -13,10 +15,10 @@ async def claimer(worker_id):
     claimed = []
     async with await psycopg.AsyncConnection.connect(DSN, autocommit=True) as c:
         while True:
-            run_id = await claim_run(c, worker_id)
-            if run_id is None:
+            claim = await claim_run(c, worker_id)
+            if claim is None:
                 break
-            claimed.append(run_id)
+            claimed.append(claim[0])
     return claimed
 
 
@@ -50,6 +52,7 @@ async def test_claim_sets_a_lease(conn):
     assert owner == "worker-0"
     assert 25 < remaining.total_seconds() <= 30      # about 30 seconds left
 
+
 #m3
 @pytest.mark.asyncio
 async def test_renew_fails_if_not_the_owner(conn):
@@ -81,24 +84,44 @@ async def test_heartbeat_keeps_lease_alive_then_it_expires(conn):
     await asyncio.sleep(1.5)                         # nobody renews now
     assert not await lease_is_valid(conn, run_id)    # → the lease expired
 
-#m3
-
-
-#m3 4
 
 @pytest.mark.asyncio
 async def test_expired_run_gets_reclaimed(conn):
     run_id = await start_run(conn, "double_twice", {"x": 1})
 
-    assert await claim_run(conn, "worker-0", lease_seconds=1) == run_id   # worker-0 takes it
+    first = await claim_run(conn, "worker-0", lease_seconds=1)
+    assert first[0] == run_id                                              # worker-0 takes it
     assert await claim_run(conn, "worker-1") is None                       # still leased → nothing for worker-1
 
     await asyncio.sleep(1.5)                                               # worker-0 "dies": no heartbeat
-    assert await claim_run(conn, "worker-1") == run_id                     # lease expired → worker-1 takes over
+    second = await claim_run(conn, "worker-1")
+    assert second[0] == run_id                                             # lease expired → worker-1 takes over
+    assert second[1] == first[1] + 1                                       # new claim → new fencing token
 
     cur = await conn.execute("SELECT lease_owner FROM runs WHERE id = %s", (run_id,))
     assert (await cur.fetchone())[0] == "worker-1"                         # the row now says worker-1
     assert await renew_lease(conn, run_id, "worker-0") is False            # worker-0 lost it
 
 
-#m3 4
+@step
+async def add(a, b):
+    return a + b
+
+
+@pytest.mark.asyncio
+async def test_zombie_step_write_is_rejected(conn):
+    run_id = await start_run(conn, "double_twice", {"x": 1})
+
+    _, v0 = await claim_run(conn, "worker-0", lease_seconds=1)             # worker-0 holds token v0
+    await asyncio.sleep(1.5)                                               # its lease expires
+    _, v1 = await claim_run(conn, "worker-1")                              # worker-1 takes over
+    assert v1 == v0 + 1
+
+    current_run.set(RunContext(run_id=run_id, conn=conn, lease_version=v0))   # zombie worker-0
+    with pytest.raises(LeaseLostError):
+        await add(2, 3)
+    cur = await conn.execute("SELECT count(*) FROM steps WHERE run_id = %s", (run_id,))
+    assert (await cur.fetchone())[0] == 0                                  # nothing was written
+
+    current_run.set(RunContext(run_id=run_id, conn=conn, lease_version=v1))   # the real owner
+    assert await add(2, 3) == 5

@@ -12,6 +12,8 @@ class NonDeterminismError(Exception):
 class ParallelStepError(Exception):
     """Two steps of the same run ran at the same time."""
 
+class LeaseLostError(Exception):
+    """This worker's lease was taken over; it must not write anymore."""
 
 def idempotency_key() -> str:
     """The key for the step running right now. Pass it to outside APIs."""
@@ -21,6 +23,20 @@ def idempotency_key() -> str:
     return ctx.step_key
 
 
+async def _check_lease(ctx):
+    """Fencing: refuse to write if another worker has claimed this run since we did."""
+    if ctx.lease_version is None:
+        return                                   # not run by a worker (steps called directly in tests)
+    cur = await ctx.conn.execute(
+        "SELECT lease_version FROM runs WHERE id = %s FOR UPDATE", (ctx.run_id,)
+    )
+    (current,) = await cur.fetchone()
+    if current != ctx.lease_version:
+        raise LeaseLostError(
+            f"run {ctx.run_id}: my lease version {ctx.lease_version} is stale (now {current})"
+        )
+
+    
 def step(fn):
     @functools.wraps(fn)
     async def wrapper(*args, **kwargs):
@@ -51,11 +67,13 @@ def step(fn):
                 # status == "started": crashed mid-step last time → run it again
 
             # 2. Mark it started (skipped if the started row already exists).
-            await ctx.conn.execute(
-                "INSERT INTO steps (run_id, seq, name, idempotency_key, status) "
-                "VALUES (%s, %s, %s, %s, 'started') "
-                "ON CONFLICT (run_id, seq) DO NOTHING",
-                (ctx.run_id, seq, name, key),
+            async with ctx.conn.transaction():
+                await _check_lease(ctx)
+                await ctx.conn.execute(
+                    "INSERT INTO steps (run_id, seq, name, idempotency_key, status) "
+                    "VALUES (%s, %s, %s, %s, 'started') "
+                    "ON CONFLICT (run_id, seq) DO NOTHING",
+                    (ctx.run_id, seq, name, key),
             )
 
             # 3. Run it for real, with its key available.
@@ -67,6 +85,7 @@ def step(fn):
 
             # 4. Mark it completed.
             async with ctx.conn.transaction():
+                await _check_lease(ctx)
                 await ctx.conn.execute(
                     "UPDATE steps SET status = 'completed', output = %s, "
                     "completed_at = now() WHERE run_id = %s AND seq = %s",
@@ -77,3 +96,6 @@ def step(fn):
             ctx.in_step = False
 
     return wrapper
+
+
+
