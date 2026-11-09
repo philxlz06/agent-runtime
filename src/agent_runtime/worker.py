@@ -11,6 +11,7 @@ async def claim_run(conn, worker_id, lease_seconds=LEASE_SECONDS):
         SET status = 'running',
             lease_owner = %s,
             lease_expires_at = now() + %s * interval '1 second',
+            lease_version = lease_version + 1,              
             updated_at = now()
         WHERE id = (
             SELECT id FROM runs
@@ -20,12 +21,12 @@ async def claim_run(conn, worker_id, lease_seconds=LEASE_SECONDS):
             FOR UPDATE SKIP LOCKED
             LIMIT 1
         )
-        RETURNING id
+        RETURNING id, lease_version
         """,
         (worker_id, lease_seconds),
     )
     row = await cur.fetchone()
-    return row[0] if row else None
+    return row if row else None
 
 
 async def renew_lease(conn, run_id, worker_id, lease_seconds=LEASE_SECONDS):

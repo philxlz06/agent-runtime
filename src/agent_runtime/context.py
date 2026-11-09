@@ -12,6 +12,7 @@ class RunContext:
     seq: int = 0
     in_step: bool = False
     step_key: str | None = None   # key of the step running right now
+    lease_version: int | None = None   # fencing token; None = not run by a worker (tests)
 
     def next_seq(self) -> int:
         self.seq += 1
