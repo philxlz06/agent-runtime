@@ -15,14 +15,17 @@ def workflow(fn):
     return fn
 
 
-async def start_run(conn, workflow_name, input=None) -> uuid.UUID:
+async def start_run(conn, workflow_name, input=None, request_key=None) -> uuid.UUID:
     cur = await conn.execute(
-        "INSERT INTO runs (workflow_name, input) VALUES (%s, %s) RETURNING id",
-        (workflow_name, Jsonb(input or {})),
+        "INSERT INTO runs (workflow_name, input, request_key) VALUES (%s, %s, %s) "
+        "ON CONFLICT (request_key) DO NOTHING RETURNING id",
+        (workflow_name, Jsonb(input or {}), request_key),
     )
-    (run_id,) = await cur.fetchone()
-    return run_id
-
+    row = await cur.fetchone()
+    if row is None:                         # this key was used before → return that run
+        cur = await conn.execute("SELECT id FROM runs WHERE request_key = %s", (request_key,))
+        row = await cur.fetchone()
+    return row[0]
 
 async def run_workflow(conn, run_id, lease_version=None):
     cur = await conn.execute(
