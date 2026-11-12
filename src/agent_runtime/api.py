@@ -92,3 +92,11 @@ async def decide_approval(run_id: UUID, seq: int, body: Decision, conn=Depends(g
     if not await decide(conn, run_id, seq, body.approved, body.decided_by):
         raise HTTPException(status_code=409, detail="no pending approval at that step")
     return {"ok": True}
+
+@app.get("/health")
+async def health_checkup(conn=Depends(get_conn)):
+    cur = await conn.execute(
+        "SELECT 1"
+    )
+    return {"ok": True}
+

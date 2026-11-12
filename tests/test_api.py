@@ -123,3 +123,10 @@ async def test_end_to_end_with_workers(client):
         finally:
             stop.set()
             await asyncio.gather(*workers)
+
+
+@pytest.mark.asyncio
+async def test_health(client):
+    r = await client.get("/health")
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
