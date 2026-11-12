@@ -87,3 +87,27 @@ async def heartbeat(conn, run_id, lease_version, lease_seconds=LEASE_SECONDS, ev
         await asyncio.sleep(every)
         if not await renew_lease(conn, run_id, lease_version, lease_seconds):
             return
+
+
+async def main():
+    import os
+    import socket
+
+    from psycopg_pool import AsyncConnectionPool
+
+    import agent_runtime.demo  # noqa: F401  (registers the demo workflows)
+    from agent_runtime.db import DSN
+
+    async with AsyncConnectionPool(
+        DSN, kwargs={"autocommit": True}, min_size=1, max_size=4, open=False
+    ) as pool:
+        await worker_loop(pool, f"{socket.gethostname()}-{os.getpid()}")
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(main())
+
+
+
+

@@ -10,5 +10,22 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://runtime:runtime@db:5432/runtime
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  worker:
+    build: .
+    command: ["python", "-m", "agent_runtime.worker"]
+    environment:
+      DATABASE_URL: postgresql://runtime:runtime@db:5432/runtime
+    depends_on:
+      - db
+
 volumes:
   pgdata:
