@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD
 
 on:
   pull_request:
@@ -7,6 +7,7 @@ on:
 
 jobs:
   test:
+    name: Tests (CI)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -32,6 +33,7 @@ jobs:
         run: ~/.local/bin/uv run pytest -v
 
   deploy:
+    name: Deploy (CD)
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -42,8 +44,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new ubuntu@${{ secrets.DEPLOY_HOST }} \
-            'cd ~/agent-runtime && git pull && docker compose -f compose.prod.yaml up -d --build'
+                    ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new ubuntu@${{ secrets.DEPLOY_HOST }} 'cd ~/agent-runtime && git pull && docker compose -f compose.prod.yaml up -d --build'
       - name: Check the site is healthy
         run: |
           sleep 15
