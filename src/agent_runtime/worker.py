@@ -3,6 +3,7 @@ import logging
 
 from agent_runtime.step import LeaseLostError
 from agent_runtime.workflow import run_workflow
+import signal
 
 
 log = logging.getLogger(__name__)
@@ -88,6 +89,13 @@ async def heartbeat(conn, run_id, lease_version, lease_seconds=LEASE_SECONDS, ev
         if not await renew_lease(conn, run_id, lease_version, lease_seconds):
             return
 
+        
+def install_stop_signals(stop):
+    """When asked to stop (docker stop, Ctrl+C), finish the current run and exit."""
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, stop.set)
+
 
 async def main():
     import os
@@ -98,10 +106,12 @@ async def main():
     import agent_runtime.demo  # noqa: F401  (registers the demo workflows)
     from agent_runtime.db import DSN
 
+    stop = asyncio.Event()
+    install_stop_signals(stop)
     async with AsyncConnectionPool(
         DSN, kwargs={"autocommit": True}, min_size=1, max_size=4, open=False
     ) as pool:
-        await worker_loop(pool, f"{socket.gethostname()}-{os.getpid()}")
+        await worker_loop(pool, f"{socket.gethostname()}-{os.getpid()}", stop=stop)
 
 
 if __name__ == "__main__":

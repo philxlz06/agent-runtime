@@ -58,3 +58,11 @@ async def test_chaos_every_run_finishes_exactly_once(conn):
 
     cur = await conn.execute("SELECT count(*) FROM effects")
     assert (await cur.fetchone())[0] == N_RUNS                 # exactly one refund per run
+
+
+@pytest.mark.asyncio
+async def test_worker_exits_cleanly_on_sigterm(conn):
+    p = start_worker()
+    await asyncio.sleep(1.5)                  # let it start up and begin polling
+    p.send_signal(signal.SIGTERM)             # what `docker stop` sends
+    assert p.wait(timeout=5) == 0             # exited on its own, cleanly

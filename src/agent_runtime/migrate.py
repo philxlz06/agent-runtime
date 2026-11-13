@@ -3,24 +3,31 @@ from pathlib import Path
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
+MIGRATION_LOCK = 7_274_727      # any fixed number; same everywhere
+
+
 async def migrate(conn):
     """Apply any migrations this database hasn't run yet, oldest first."""
-    await conn.execute(
-        "CREATE TABLE IF NOT EXISTS schema_migrations ("
-        " name TEXT PRIMARY KEY,"
-        " applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
-    )
-    cur = await conn.execute("SELECT name FROM schema_migrations")
-    done = {row[0] for row in await cur.fetchall()}
+    await conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK,))   # wait for our turn
+    try:
+        await conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migrations ("
+            " name TEXT PRIMARY KEY,"
+            " applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+        )
+        cur = await conn.execute("SELECT name FROM schema_migrations")
+        done = {row[0] for row in await cur.fetchall()}
 
-    for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
-        if path.name in done:
-            continue                                         # already applied → skip
-        async with conn.transaction():                       # all-or-nothing per file
-            await conn.execute(path.read_text())
-            await conn.execute(
-                "INSERT INTO schema_migrations (name) VALUES (%s)", (path.name,)
-            )
+        for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
+            if path.name in done:
+                continue                                     # already applied → skip
+            async with conn.transaction():                   # all-or-nothing per file
+                await conn.execute(path.read_text())
+                await conn.execute(
+                    "INSERT INTO schema_migrations (name) VALUES (%s)", (path.name,)
+                )
+    finally:
+        await conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK,))  # always let go
 
 
 if __name__ == "__main__":

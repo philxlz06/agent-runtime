@@ -10,7 +10,7 @@ from agent_runtime.step import idempotency_key, step
 from agent_runtime.worker import worker_loop
 from agent_runtime.workflow import workflow
 from fake_payments import refund
-
+from agent_runtime.worker import install_stop_signals 
 
 @step
 async def slow_add(a, b):
@@ -32,11 +32,13 @@ async def chaos_flow(x):
 
 
 async def main():
+    stop = asyncio.Event()
+    install_stop_signals(stop)
     lease = float(os.environ.get("LEASE_SECONDS", "2"))
     async with AsyncConnectionPool(
         DSN, kwargs={"autocommit": True}, min_size=1, max_size=4, open=False
     ) as pool:
-        await worker_loop(pool, f"proc-{os.getpid()}", lease_seconds=lease, poll_interval=0.1)
+        await worker_loop(pool, f"proc-{os.getpid()}", lease_seconds=lease, poll_interval=0.1, stop = stop)
 
 
 if __name__ == "__main__":
