@@ -24,7 +24,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install uv
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: Install dependencies
@@ -44,7 +44,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-                    ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new ubuntu@${{ secrets.DEPLOY_HOST }} 'cd ~/agent-runtime && git pull && docker compose -f compose.prod.yaml up -d --build'
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new ubuntu@${{ secrets.DEPLOY_HOST }} 'cd ~/agent-runtime && git pull && docker compose -f compose.prod.yaml up -d --build'
       - name: Check the site is healthy
         run: |
           sleep 15
