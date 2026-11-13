@@ -9,6 +9,9 @@ from agent_runtime.step import LeaseLostError, step
 from psycopg_pool import AsyncConnectionPool
 from agent_runtime.worker import claim_run, heartbeat, renew_lease, worker_loop
 from agent_runtime.workflow import start_run, workflow
+from agent_runtime.step import StepTimeoutError 
+import asyncio
+
 
 async def claimer(worker_id):
     """One fake worker: keep claiming runs until there are none left."""
@@ -168,3 +171,17 @@ async def test_workers_complete_all_runs(conn):
     rows = await cur.fetchall()
     assert len(rows) == 20
     assert all(n == 2 for _, n in rows)                   # exactly 2 steps each, none doubled
+
+
+@step(timeout=0.2)
+async def hangs():
+    await asyncio.sleep(5)          # way longer than 0.2s
+    return "never"
+
+
+@pytest.mark.asyncio
+async def test_hung_step_times_out(conn):
+    run_id = await start_run(conn, "anything")
+    current_run.set(RunContext(run_id=run_id, conn=conn))
+    with pytest.raises(StepTimeoutError):
+        await hangs()

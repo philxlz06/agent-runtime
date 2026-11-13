@@ -2,7 +2,9 @@ import pytest
 
 from agent_runtime.migrate import migrate
 from agent_runtime.workflow import start_run
-
+import asyncio
+import psycopg
+from agent_runtime.db import DSN
 
 @pytest.mark.asyncio
 async def test_migrations_are_recorded(conn):
@@ -23,3 +25,8 @@ async def test_runs_can_wait_for_approval(conn):
     await conn.execute(          # this would FAIL before 002 (the old CHECK rule)
         "UPDATE runs SET status = 'waiting_approval' WHERE id = %s", (run_id,)
     )
+
+@pytest.mark.asyncio
+async def test_concurrent_migrations_dont_collide(conn):
+    async with await psycopg.AsyncConnection.connect(DSN, autocommit=True) as other:
+        await asyncio.gather(migrate(conn), migrate(other))   # both at once, no error

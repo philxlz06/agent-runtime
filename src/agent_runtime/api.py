@@ -9,15 +9,16 @@ from pydantic import BaseModel
 from agent_runtime.approval import decide
 from agent_runtime.db import DSN
 from agent_runtime.workflow import start_run
+from agent_runtime.migrate import migrate
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with AsyncConnectionPool(DSN, kwargs={"autocommit": True}, open=False) as pool:
-        app.state.pool = pool            # open the pool once, when the server starts
-        yield                            # …the server runs here…
-                                         # …pool closes when the server stops
-
+        async with pool.connection() as conn:
+            await migrate(conn)              # bring the DB up to date on every start
+        app.state.pool = pool
+        yield
 
 app = FastAPI(title="agent-runtime", lifespan=lifespan)
 

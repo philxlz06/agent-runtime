@@ -3,7 +3,7 @@ import functools
 from psycopg.types.json import Jsonb
 
 from agent_runtime.context import current_run
-
+import asyncio
 
 class NonDeterminismError(Exception):
     """Workflow took a different path on replay than the first time."""
@@ -14,6 +14,13 @@ class ParallelStepError(Exception):
 
 class LeaseLostError(Exception):
     """This worker's lease was taken over; it must not write anymore."""
+
+DEFAULT_STEP_TIMEOUT = 300   # seconds; generous, so normal API calls never hit it
+
+
+class StepTimeoutError(Exception):
+    """A step ran longer than its timeout and was cancelled."""
+
 
 def idempotency_key() -> str:
     """The key for the step running right now. Pass it to outside APIs."""
@@ -37,7 +44,9 @@ async def _check_lease(ctx):
         )
 
     
-def step(fn):
+def step(fn=None, *, timeout=DEFAULT_STEP_TIMEOUT):
+    if fn is None:                                   # used as @step(timeout=30)
+        return lambda f: step(f, timeout=timeout)
     @functools.wraps(fn)
     async def wrapper(*args, **kwargs):
         ctx = current_run.get()
@@ -76,10 +85,12 @@ def step(fn):
                     (ctx.run_id, seq, name, key),
             )
 
-            # 3. Run it for real, with its key available.
+            # 3. Run it for real, with its key available, and a time limit.
             ctx.step_key = key
             try:
-                result = await fn(*args, **kwargs)
+                result = await asyncio.wait_for(fn(*args, **kwargs), timeout)
+            except TimeoutError:
+                raise StepTimeoutError(f"step {name} took longer than {timeout}s")
             finally:
                 ctx.step_key = None
 
