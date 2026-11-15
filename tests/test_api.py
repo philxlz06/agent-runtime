@@ -11,7 +11,7 @@ from agent_runtime.db import DSN
 from agent_runtime.step import step
 from agent_runtime.worker import worker_loop
 from agent_runtime.workflow import start_run, workflow
-
+from agent_runtime import api
 
 @pytest_asyncio.fixture
 async def client(conn):                                  # conn first → tables migrated + wiped
@@ -147,3 +147,32 @@ async def client(conn, monkeypatch):
 async def test_writes_need_the_admin_key(client):
     r = await client.post("/runs", json={"workflow": "anything"}, headers={"X-Admin-Key": "wrong"})
     assert r.status_code == 401
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    api.demo_start_limit.hits.clear()          # each test starts with a clean limiter
+
+
+@pytest.mark.asyncio
+async def test_demo_start_needs_no_key_and_caps_count(client):
+    r = await client.post("/demo/runs?count=2", headers={"X-Admin-Key": ""})
+    assert r.status_code == 201
+    assert len(r.json()["ids"]) == 2
+    r = await client.post("/demo/runs?count=50")
+    assert r.status_code == 422                 # over the cap of 3
+
+
+@pytest.mark.asyncio
+async def test_demo_start_is_rate_limited(client):
+    for _ in range(5):
+        assert (await client.post("/demo/runs")).status_code == 201
+    assert (await client.post("/demo/runs")).status_code == 429   # the 6th within a minute
+
+
+@pytest.mark.asyncio
+async def test_demo_stats(client):
+    await client.post("/demo/runs?count=3")
+    r = await client.get("/demo/stats")
+    assert r.json()["pending"] == 3
+    assert r.json()["refunds"] == 0

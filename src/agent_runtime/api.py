@@ -10,8 +10,8 @@ from agent_runtime.approval import decide
 from agent_runtime.db import DSN
 from agent_runtime.workflow import start_run
 from agent_runtime.migrate import migrate
-
-
+from fastapi import Query
+from agent_runtime.ratelimit import RateLimiter
 import os
 import secrets
 
@@ -112,3 +112,41 @@ async def health_checkup(conn=Depends(get_conn)):
     )
     return {"ok": True}
 
+
+demo_start_limit = RateLimiter(limit=5, per_seconds=60)   # 5 clicks per minute per visitor
+MAX_DEMO_BACKLOG = 50                                     # global brake
+
+
+@app.post("/demo/runs", status_code=201)
+async def demo_start(
+    request: Request,
+    count: int = Query(1, ge=1, le=3),
+    conn=Depends(get_conn),
+):
+    if not demo_start_limit.allow(request.client.host):
+        raise HTTPException(status_code=429, detail="slow down: 5 demo requests per minute")
+    cur = await conn.execute("SELECT count(*) FROM runs WHERE status IN ('pending', 'running')")
+    if (await cur.fetchone())[0] >= MAX_DEMO_BACKLOG:
+        raise HTTPException(status_code=429, detail="the demo is busy, try again in a moment")
+    ids = []
+    for _ in range(count):
+        order_id = f"D-{secrets.token_hex(3)}"            # e.g. D-4f9a1c
+        ids.append(await start_run(conn, "refund_demo", {"order_id": order_id}))
+    return {"ids": ids}
+
+
+@app.get("/demo/stats")
+async def demo_stats(conn=Depends(get_conn)):
+    cur = conn.cursor(row_factory=dict_row)
+    await cur.execute(
+        "SELECT "
+        " count(*) FILTER (WHERE status = 'pending')   AS pending,"
+        " count(*) FILTER (WHERE status = 'running')   AS running,"
+        " count(*) FILTER (WHERE status = 'completed') AS completed,"
+        " count(*) FILTER (WHERE status = 'failed')    AS failed "
+        "FROM runs WHERE workflow_name = 'refund_demo'"
+    )
+    stats = await cur.fetchone()
+    await cur.execute("SELECT count(*) AS refunds FROM demo_refunds")
+    stats.update(await cur.fetchone())
+    return stats
