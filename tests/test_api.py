@@ -130,3 +130,20 @@ async def test_health(client):
     r = await client.get("/health")
     assert r.status_code == 200
     assert r.json() == {"ok": True}
+
+
+@pytest_asyncio.fixture
+async def client(conn, monkeypatch):
+    monkeypatch.setenv("ADMIN_API_KEY", "test-key")              # a fake key, just for tests
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test", headers={"X-Admin-Key": "test-key"}
+        ) as c:
+            yield c
+
+
+@pytest.mark.asyncio
+async def test_writes_need_the_admin_key(client):
+    r = await client.post("/runs", json={"workflow": "anything"}, headers={"X-Admin-Key": "wrong"})
+    assert r.status_code == 401
