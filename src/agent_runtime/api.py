@@ -12,6 +12,17 @@ from agent_runtime.workflow import start_run
 from agent_runtime.migrate import migrate
 
 
+import os
+import secrets
+
+
+def require_admin(x_admin_key: str | None = Header(default=None)):
+    """Only requests carrying the right X-Admin-Key header get through."""
+    expected = os.environ.get("ADMIN_API_KEY")
+    if not expected or not x_admin_key or not secrets.compare_digest(x_admin_key, expected):
+        raise HTTPException(status_code=401, detail="admin key required")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with AsyncConnectionPool(DSN, kwargs={"autocommit": True}, open=False) as pool:
@@ -38,7 +49,7 @@ class Decision(BaseModel):
     decided_by: str = "human"
 
 
-@app.post("/runs", status_code=201)
+@app.post("/runs", status_code=201, dependencies=[Depends(require_admin)])
 async def create_run(
     body: StartRun,
     idempotency_key: str | None = Header(default=None),
@@ -88,7 +99,7 @@ async def get_run(run_id: UUID, conn=Depends(get_conn)):
     return run
 
 
-@app.post("/runs/{run_id}/approvals/{seq}")
+@app.post("/runs/{run_id}/approvals/{seq}", dependencies=[Depends(require_admin)])
 async def decide_approval(run_id: UUID, seq: int, body: Decision, conn=Depends(get_conn)):
     if not await decide(conn, run_id, seq, body.approved, body.decided_by):
         raise HTTPException(status_code=409, detail="no pending approval at that step")
