@@ -4,6 +4,8 @@ import logging
 from agent_runtime.step import LeaseLostError
 from agent_runtime.workflow import run_workflow
 import signal
+import os
+import secrets
 
 
 log = logging.getLogger(__name__)
@@ -106,12 +108,19 @@ async def main():
     import agent_runtime.demo  # noqa: F401  (registers the demo workflows)
     from agent_runtime.db import DSN
 
+    lease = float(os.environ.get("LEASE_SECONDS", LEASE_SECONDS))
+    worker_id = f"{socket.gethostname()}-{os.getpid()}-{secrets.token_hex(2)}"
     stop = asyncio.Event()
     install_stop_signals(stop)
     async with AsyncConnectionPool(
         DSN, kwargs={"autocommit": True}, min_size=1, max_size=4, open=False
     ) as pool:
-        await worker_loop(pool, f"{socket.gethostname()}-{os.getpid()}", stop=stop)
+        listener = None
+        if os.environ.get("DEMO_KILLS") == "1":
+            listener = asyncio.create_task(kill_listener(pool, worker_id))
+        await worker_loop(pool, worker_id, lease_seconds=lease, stop=stop)
+        if listener:
+            listener.cancel()
 
 
 if __name__ == "__main__":
@@ -119,5 +128,26 @@ if __name__ == "__main__":
     asyncio.run(main())
 
 
+async def claim_kill_request(conn, worker_id):
+    """Claim a pending kill request, but ONLY if this worker is in the middle of a run."""
+    cur = await conn.execute(
+        "UPDATE kill_requests SET claimed_by = %s, claimed_at = now() "
+        "WHERE id = (SELECT id FROM kill_requests "
+        "            WHERE claimed_by IS NULL AND requested_at > now() - interval '60 seconds' "
+        "            ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1) "
+        "AND EXISTS (SELECT 1 FROM runs WHERE status = 'running' AND lease_owner = %s) "
+        "RETURNING id",
+        (worker_id, worker_id),
+    )
+    return await cur.fetchone()
 
 
+async def kill_listener(pool, worker_id, every=1.0):
+    """Demo only: check every second whether a visitor asked to kill a busy worker."""
+    while True:
+        await asyncio.sleep(every)
+        async with pool.connection() as conn:
+            claimed = await claim_kill_request(conn, worker_id)
+        if claimed:
+            log.warning("kill request %s claimed, dying now (demo)", claimed[0])
+            os.kill(os.getpid(), signal.SIGKILL)

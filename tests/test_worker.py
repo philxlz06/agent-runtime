@@ -11,7 +11,7 @@ from agent_runtime.worker import claim_run, heartbeat, renew_lease, worker_loop
 from agent_runtime.workflow import start_run, workflow
 from agent_runtime.step import StepTimeoutError 
 import asyncio
-
+from agent_runtime.worker import claim_kill_request, claim_run, heartbeat, renew_lease, worker_loop
 
 async def claimer(worker_id):
     """One fake worker: keep claiming runs until there are none left."""
@@ -185,3 +185,13 @@ async def test_hung_step_times_out(conn):
     current_run.set(RunContext(run_id=run_id, conn=conn))
     with pytest.raises(StepTimeoutError):
         await hangs()
+
+
+@pytest.mark.asyncio
+async def test_only_a_busy_worker_claims_a_kill(conn):
+    await conn.execute("INSERT INTO kill_requests DEFAULT VALUES")
+    assert await claim_kill_request(conn, "worker-0") is None        # idle → not claimed
+
+    await start_run(conn, "double_twice", {"x": 1})
+    await claim_run(conn, "worker-0")                                # now worker-0 is busy
+    assert await claim_kill_request(conn, "worker-0") is not None    # busy → claimed

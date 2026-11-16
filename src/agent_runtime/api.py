@@ -150,3 +150,14 @@ async def demo_stats(conn=Depends(get_conn)):
     await cur.execute("SELECT count(*) AS refunds FROM demo_refunds")
     stats.update(await cur.fetchone())
     return stats
+
+
+demo_kill_limit = RateLimiter(limit=1, per_seconds=20)    # one kill per 20s, for EVERYONE
+
+
+@app.post("/demo/kill", status_code=202)
+async def demo_kill(conn=Depends(get_conn)):
+    if not demo_kill_limit.allow("global"):
+        raise HTTPException(status_code=429, detail="a worker was just killed, try again soon")
+    await conn.execute("INSERT INTO kill_requests DEFAULT VALUES")
+    return {"queued": True}

@@ -151,7 +151,8 @@ async def test_writes_need_the_admin_key(client):
 
 @pytest.fixture(autouse=True)
 def reset_rate_limits():
-    api.demo_start_limit.hits.clear()          # each test starts with a clean limiter
+    api.demo_start_limit.hits.clear() 
+    api.demo_kill_limit.hits.clear()         # each test starts with a clean limiter
 
 
 @pytest.mark.asyncio
@@ -176,3 +177,11 @@ async def test_demo_stats(client):
     r = await client.get("/demo/stats")
     assert r.json()["pending"] == 3
     assert r.json()["refunds"] == 0
+
+
+@pytest.mark.asyncio
+async def test_demo_kill_queues_a_request_with_cooldown(client, conn):
+    assert (await client.post("/demo/kill")).status_code == 202
+    assert (await client.post("/demo/kill")).status_code == 429      # cooldown
+    cur = await conn.execute("SELECT count(*) FROM kill_requests")
+    assert (await cur.fetchone())[0] == 1
