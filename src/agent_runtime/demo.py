@@ -104,7 +104,9 @@ async def support_agent(message, order_id="D-0000", source="api"):
     category = await classify(message)
     refunded = False
     if category == "refund":
-        ok = await require_approval(f"Refund $25 for order {order_id}? Customer said: {message[:200]}")
+        ok = await require_approval(
+            f"Refund $25 for order {order_id}? (Demo orders are all $25.) Customer said: {message[:200]}"
+        )
         if ok:
             order = await check_order(order_id)
             await issue_refund(order)
