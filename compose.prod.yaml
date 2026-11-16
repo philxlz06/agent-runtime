@@ -8,9 +8,14 @@ services:
     build: .
     command: ["python", "-m", "agent_runtime.worker"]
     env_file: .env
+    environment:
+      DEMO_KILLS: "1"
+      LEASE_SECONDS: "10"
+    deploy:
+      replicas: 2
     restart: unless-stopped
     stop_grace_period: 30s
-
+    
   caddy:
     image: caddy:2
     ports:

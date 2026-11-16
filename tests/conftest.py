@@ -11,5 +11,5 @@ async def conn():
     async with await psycopg.AsyncConnection.connect(DSN, autocommit=True) as conn:
         await migrate(conn)                                          # bring the DB up to date
         await conn.execute(EFFECTS_SCHEMA)
-        await conn.execute("TRUNCATE steps, approvals, runs, effects, demo_refunds")
+        await conn.execute("TRUNCATE steps, approvals, runs, effects, demo_refunds, kill_requests")
         yield conn
