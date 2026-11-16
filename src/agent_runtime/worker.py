@@ -123,9 +123,6 @@ async def main():
             listener.cancel()
 
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(main())
 
 
 async def claim_kill_request(conn, worker_id):
@@ -151,3 +148,8 @@ async def kill_listener(pool, worker_id, every=1.0):
         if claimed:
             log.warning("kill request %s claimed, dying now (demo)", claimed[0])
             os.kill(os.getpid(), signal.SIGKILL)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(main())
