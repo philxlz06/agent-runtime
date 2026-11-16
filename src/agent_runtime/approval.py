@@ -41,10 +41,10 @@ async def require_approval(prompt):
         async with ctx.conn.transaction():
             await _check_lease(ctx)
             await ctx.conn.execute(
-                "INSERT INTO steps (run_id, seq, name, idempotency_key, status, output, completed_at) "
-                "VALUES (%s, %s, %s, %s, 'completed', %s, now()) "
+                "INSERT INTO steps (run_id, seq, name, idempotency_key, status, output, completed_at, lease_version) "
+                "VALUES (%s, %s, %s, %s, 'completed', %s, now(), %s) "
                 "ON CONFLICT (run_id, seq) DO NOTHING",
-                (ctx.run_id, seq, name, f"{ctx.run_id}:{seq}", Jsonb(approved)),
+                (ctx.run_id, seq, name, f"{ctx.run_id}:{seq}", Jsonb(approved), ctx.lease_version),
             )
         return approved
 
