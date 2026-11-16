@@ -147,7 +147,7 @@ async def kill_listener(pool, worker_id, every=1.0):
             claimed = await claim_kill_request(conn, worker_id)
         if claimed:
             log.warning("kill request %s claimed, dying now (demo)", claimed[0])
-            os.kill(os.getpid(), signal.SIGKILL)
+            os._exit(137)
 
 
 if __name__ == "__main__":
