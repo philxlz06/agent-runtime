@@ -71,7 +71,9 @@ async def list_runs(
     cur = conn.cursor(row_factory=dict_row)
     await cur.execute(
         "SELECT r.id, r.workflow_name, r.status, r.lease_owner, r.created_at, r.updated_at, "
-        "  (SELECT count(*) FROM steps s WHERE s.run_id = r.id AND s.status = 'completed') AS steps_done "
+        "  (SELECT count(*) FROM steps s WHERE s.run_id = r.id AND s.status = 'completed') AS steps_done, "
+        "  (SELECT count(DISTINCT s.lease_version) FROM steps s "
+        "     WHERE s.run_id = r.id AND s.lease_version IS NOT NULL) > 1 AS resumed "
         "FROM runs r "
         "WHERE (%s::text IS NULL OR r.status = %s) "
         "  AND (%s::text IS NULL OR r.workflow_name = %s) "
@@ -94,7 +96,7 @@ async def get_run(run_id: UUID, conn=Depends(get_conn)):
         raise HTTPException(status_code=404, detail="run not found")
 
     await cur.execute(
-        "SELECT seq, name, status, output, started_at, completed_at "
+        "SELECT seq, name, status, lease_version, output, started_at, completed_at "
         "FROM steps WHERE run_id = %s ORDER BY seq",
         (run_id,),
     )

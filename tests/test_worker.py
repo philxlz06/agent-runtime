@@ -195,3 +195,13 @@ async def test_only_a_busy_worker_claims_a_kill(conn):
     await start_run(conn, "double_twice", {"x": 1})
     await claim_run(conn, "worker-0")                                # now worker-0 is busy
     assert await claim_kill_request(conn, "worker-0") is not None    # busy → claimed
+
+
+@pytest.mark.asyncio
+async def test_completed_step_records_its_attempt(conn):
+    run_id = await start_run(conn, "double_twice", {"x": 1})
+    _, v = await claim_run(conn, "worker-0")
+    current_run.set(RunContext(run_id=run_id, conn=conn, lease_version=v))
+    await add(2, 3)
+    cur = await conn.execute("SELECT lease_version FROM steps WHERE run_id = %s", (run_id,))
+    assert (await cur.fetchone())[0] == v                 # the journal remembers WHICH attempt did it

@@ -201,3 +201,15 @@ async def test_runs_filter_by_workflow(client, conn):
     r = await client.get("/runs?workflow=refund_demo")
     assert [run["workflow_name"] for run in r.json()] == ["refund_demo"]
     assert r.json()[0]["steps_done"] == 0
+
+
+@pytest.mark.asyncio
+async def test_runs_list_marks_resumed_runs(client, conn):
+    run_id = await start_run(conn, "anything")
+    await conn.execute(
+        "INSERT INTO steps (run_id, seq, name, idempotency_key, status, lease_version) VALUES "
+        "(%s, 1, 'a', 'k1', 'completed', 1), (%s, 2, 'b', 'k2', 'completed', 2)",
+        (run_id, run_id),
+    )
+    r = await client.get("/runs")
+    assert r.json()[0]["resumed"] is True                 # steps finished by 2 attempts = resumed

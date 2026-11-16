@@ -99,8 +99,9 @@ def step(fn=None, *, timeout=DEFAULT_STEP_TIMEOUT):
                 await _check_lease(ctx)
                 await ctx.conn.execute(
                     "UPDATE steps SET status = 'completed', output = %s, "
-                    "completed_at = now() WHERE run_id = %s AND seq = %s",
-                    (Jsonb(result), ctx.run_id, seq),
+                    "completed_at = now(), lease_version = %s "
+                    "WHERE run_id = %s AND seq = %s",
+                    (Jsonb(result), ctx.lease_version, ctx.run_id, seq),
                 )
             return result
         finally:
