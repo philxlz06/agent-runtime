@@ -239,3 +239,15 @@ async def test_visitors_can_only_decide_demo_runs(client, conn):
     await conn.execute("INSERT INTO approvals (run_id, seq, prompt) VALUES (%s, 2, 'Refund $25?')", (demo,))
     r = await client.post(f"/demo/support/{demo}/decision", json={"approved": True})
     assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_demo_stats_only_counts_part1_refunds(client, conn):
+    demo = await start_run(conn, "refund_demo", {"order_id": "A"})
+    agent = await start_run(conn, "support_agent", {"message": "m"})
+    await conn.execute(
+        "INSERT INTO demo_refunds (idempotency_key, order_id, amount) VALUES (%s, 'A', 25), (%s, 'B', 25)",
+        (f"{demo}:2", f"{agent}:4"),
+    )
+    r = await client.get("/demo/stats")
+    assert r.json()["refunds"] == 1          # the agent's refund doesn't count toward Part 1

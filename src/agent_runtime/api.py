@@ -152,18 +152,20 @@ async def demo_start(
 async def demo_stats(conn=Depends(get_conn)):
     cur = conn.cursor(row_factory=dict_row)
     await cur.execute(
-        "SELECT "
-        " count(*) FILTER (WHERE status = 'pending')   AS pending,"
-        " count(*) FILTER (WHERE status = 'running')   AS running,"
-        " count(*) FILTER (WHERE status = 'completed') AS completed,"
-        " count(*) FILTER (WHERE status = 'failed')    AS failed "
+        "SELECT count(*) FILTER (WHERE status = 'pending')   AS pending, "
+        "       count(*) FILTER (WHERE status = 'running')   AS running, "
+        "       count(*) FILTER (WHERE status = 'completed') AS completed, "
+        "       count(*) FILTER (WHERE status = 'failed')    AS failed "
         "FROM runs WHERE workflow_name = 'refund_demo'"
     )
     stats = await cur.fetchone()
-    await cur.execute("SELECT count(*) AS refunds FROM demo_refunds")
-    stats.update(await cur.fetchone())
+    await cur.execute(
+        "SELECT count(*) AS refunds FROM demo_refunds d "
+        "JOIN runs r ON r.id = split_part(d.idempotency_key, ':', 1)::uuid "
+        "WHERE r.workflow_name = 'refund_demo'"
+    )
+    stats["refunds"] = (await cur.fetchone())["refunds"]
     return stats
-
 
 demo_kill_limit = RateLimiter(limit=1, per_seconds=20)    # one kill per 20s, for EVERYONE
 
