@@ -9,14 +9,17 @@
   :root {
     --bg: #fafaf9; --surface: #ffffff; --text: #1c1917; --muted: #6b6560; --border: #e7e5e4;
     --accent: #2563eb; --good: #15803d; --good-bg: #dcfce7; --bad: #b91c1c; --bad-bg: #fee2e2;
-    --warn: #a16207; --warn-bg: #fef9c3; --idle: #e7e5e4;
+    --warn: #a16207; --warn-bg: #fef9c3; --idle: #e7e5e4; --live: #16a34a;
+    /* one colour per attempt (lease_version) in the run details */
+    --a1: #2563eb; --a2: #d97706; --a3: #9333ea;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #0c0c0d; --surface: #17171a; --text: #ececec; --muted: #9a9aa2; --border: #2a2a30;
       --accent: #60a5fa; --good: #4ade80; --good-bg: #13301e; --bad: #f87171; --bad-bg: #3a1616;
-      --warn: #facc15; --warn-bg: #332b0a; --idle: #2a2a30;
+      --warn: #facc15; --warn-bg: #332b0a; --idle: #2a2a30; --live: #4ade80;
+      --a1: #60a5fa; --a2: #fbbf24; --a3: #c084fc;
     }
   }
   * { box-sizing: border-box; }
@@ -28,40 +31,68 @@
   h1 { font-size: clamp(1.6rem, 5vw, 2.2rem); line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.02em; }
   h2 { font-size: 1.05rem; margin: 0 0 12px; }
   .lede { color: var(--muted); margin: 0; font-size: 1.1rem; }
-  section { margin-top: 36px; }
+  section { margin-top: 32px; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
   .muted { color: var(--muted); }
   .small { font-size: 0.85rem; }
-  code, .mono { font-family: var(--mono); font-size: 0.85em; }
+  .mono { font-family: var(--mono); font-size: 0.85em; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-  /* ---- 2. problem lanes ---- */
-  .lane { display: grid; gap: 10px; }
-  .lane-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .lane-title { font-weight: 600; }
+  /* ================= "The problem": an ILLUSTRATION (muted, smaller) ================= */
+  .illustration {
+    border: 1px dashed var(--border); border-radius: 12px; padding: 14px;
+    font-size: 0.88rem; background: transparent;
+  }
+  .illustration h2 { font-size: 0.95rem; margin: 0; color: var(--muted); }
+  .tag {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 99px; padding: 1px 8px;
+  }
+  .lane { display: grid; gap: 8px; margin-top: 12px; }
+  .lane-title { font-weight: 600; font-size: 0.85rem; }
   .lane-title.bad { color: var(--bad); }
   .lane-title.good { color: var(--good); }
-  .worker { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+  .worker { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
   .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .step {
-    border: 1px solid var(--border); border-radius: 8px; padding: 8px 6px; text-align: center;
-    font-size: 0.8rem; transition: background .3s, border-color .3s, opacity .3s; position: relative;
+    border: 1px solid var(--border); border-radius: 8px; padding: 6px 4px; text-align: center;
+    font-size: 0.78rem; transition: background .3s, border-color .3s, opacity .3s;
   }
-  .step.idle { opacity: 0.5; }
-  .step.active { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
-  .step.done { background: var(--good-bg); border-color: transparent; }
-  .step.journal { background: var(--good-bg); border-color: transparent; opacity: 0.6; }
+  .step small { display: block; font-size: 0.7rem; min-height: 1.2em; color: var(--muted); }
+  .step.idle { opacity: 0.45; }
+  .step.active { border-color: var(--accent); }
+  .step.done, .step.journal { background: var(--good-bg); border-color: transparent; }
+  .step.journal small { color: var(--good); }
+  .step.rerun { background: var(--bad-bg); border-color: transparent; }
+  .step.rerun small { color: var(--bad); }
   .step.crash { background: var(--bad-bg); border-color: var(--bad); }
-  .lane-foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 0.85rem; min-height: 1.5em; }
-  .refunds { font-weight: 600; font-variant-numeric: tabular-nums; }
-  .refunds.bad { color: var(--bad); }
-  .refunds.good { color: var(--good); }
+  .counters { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 0.8rem; }
+  .counters b { font-variant-numeric: tabular-nums; }
+  .counters .bad { color: var(--bad); }
+  .counters .good { color: var(--good); }
   .divider {
-    text-align: center; margin: 14px 0; font-size: 0.85rem; color: var(--muted);
-    padding: 8px; border-top: 1px dashed var(--border); border-bottom: 1px dashed var(--border);
+    text-align: center; margin: 12px 0 0; font-size: 0.8rem; color: var(--muted);
+    padding: 6px; border-top: 1px dashed var(--border);
   }
   .divider b { color: var(--text); font-weight: 600; }
 
-  /* ---- 3. stats ---- */
+  /* ================= Everything below: the REAL SYSTEM ================= */
+  .live {
+    margin-top: 32px; border: 2px solid var(--live); border-radius: 16px; padding: 20px 16px;
+    background: color-mix(in srgb, var(--live) 4%, var(--surface));
+  }
+  .live > section:first-of-type { margin-top: 16px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.8rem;
+    letter-spacing: 0.04em; color: var(--live);
+    border: 1px solid var(--live); border-radius: 99px; padding: 3px 12px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--live); }
+  .badge.err { color: var(--warn); border-color: var(--warn); }
+  .badge.err .dot { background: var(--warn); }
+  .live h2 { font-size: 1.15rem; }
+
+  /* stats */
   .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
   .stat { text-align: center; padding: 10px 4px; }
   .stat .n { font-size: 1.6rem; font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -72,11 +103,23 @@
   .proof.warn { background: var(--warn-bg); color: var(--warn); }
   .proof.bad  { background: var(--bad-bg);  color: var(--bad); }
   .proof.none { background: var(--idle); color: var(--muted); }
-  @media (max-width: 520px) {
-    .stats { grid-template-columns: repeat(3, 1fr); }
-  }
+  @media (max-width: 520px) { .stats { grid-template-columns: repeat(3, 1fr); } }
 
-  /* ---- 4. buttons ---- */
+  /* guided 1-2-3 */
+  .guide { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 6px; }
+  .guide li {
+    display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 10px;
+    border: 1px solid transparent; color: var(--muted); transition: all .3s;
+  }
+  .guide .num {
+    flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 0.8rem; font-weight: 700; background: var(--idle); color: var(--text);
+  }
+  /* step ② lights up while runs are actually running (= now is the moment to kill) */
+  .guide li.now { border-color: var(--bad); background: var(--bad-bg); color: var(--text); font-weight: 600; }
+  .guide li.now .num { background: var(--bad); color: #fff; }
+
+  /* buttons */
   .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   button {
     font: inherit; font-weight: 600; padding: 10px 16px; border-radius: 10px; cursor: pointer;
@@ -84,165 +127,217 @@
   }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   button.danger { color: var(--bad); border-color: var(--bad); }
+  button.danger.now { background: var(--bad); color: #fff; }
   button:disabled { opacity: 0.5; cursor: wait; }
   #msg { min-height: 1.5em; margin-top: 8px; font-size: 0.9rem; color: var(--muted); }
   #msg.error { color: var(--warn); }
 
-  /* ---- 5. runs table ---- */
-  .table-wrap { overflow-x: auto; }
+  /* runs table */
+  .table-wrap { overflow-x: auto; padding: 4px 8px; }
   table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
   th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   th { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 500; }
+  tbody tr.run { cursor: pointer; }
+  tbody tr.run:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  tr.run td:first-child::before { content: "▸ "; color: var(--muted); }
+  tr.run.open td:first-child::before { content: "▾ "; }
   td.num { font-variant-numeric: tabular-nums; color: var(--muted); }
-  .pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 0.78rem; background: var(--idle); }
+  a { color: var(--accent); }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 0.75rem; background: var(--idle); margin-left: 4px; }
+  .pill:first-child { margin-left: 0; }
   .pill.running   { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
   .pill.completed { background: var(--good-bg); color: var(--good); }
   .pill.failed    { background: var(--bad-bg); color: var(--bad); }
-  .bar { width: 80px; height: 6px; border-radius: 3px; background: var(--idle); overflow: hidden; display: inline-block; vertical-align: middle; }
+  .pill.resumed   { background: var(--warn-bg); color: var(--warn); font-weight: 600; }
+  .pill.yours     { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+  .bar { width: 70px; height: 6px; border-radius: 3px; background: var(--idle); overflow: hidden; display: inline-block; vertical-align: middle; }
   .bar > i { display: block; height: 100%; background: var(--good); transition: width .4s; }
-  .takeover { color: var(--warn); font-weight: 600; }
-  tr.flash { animation: flash 2s ease-out; }
-  @keyframes flash { from { background: var(--warn-bg); } to { background: transparent; } }
-  .conn { font-size: 0.8rem; }
-  .conn.ok::before  { content: "● "; color: var(--good); }
-  .conn.err { color: var(--warn); }
-  .conn.err::before { content: "● "; }
 
-  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 0.9rem; display: flex; gap: 16px; }
-  a { color: var(--accent); }
+  /* expanded row: the run's journal */
+  tr.details > td { white-space: normal; background: color-mix(in srgb, var(--text) 3%, transparent); padding: 10px 12px; }
+  .jsteps { display: grid; gap: 4px; margin: 0 0 8px; }
+  .jstep {
+    display: grid; grid-template-columns: 1.4em 1fr auto auto; gap: 10px; align-items: center;
+    padding: 6px 10px; border-radius: 8px; border-left: 4px solid var(--idle); background: var(--surface);
+    font-size: 0.85rem;
+  }
+  .jstep.a1 { border-left-color: var(--a1); } .jstep.a1 .att { color: var(--a1); }
+  .jstep.a2 { border-left-color: var(--a2); } .jstep.a2 .att { color: var(--a2); }
+  .jstep.a3 { border-left-color: var(--a3); } .jstep.a3 .att { color: var(--a3); }
+  .att { font-weight: 600; font-size: 0.8rem; }
+  .caption { font-size: 0.85rem; }
+
+  /* Change highlights: applied only when a polled value actually differs from the
+     previous poll. A subtle one for ordinary changes, a stronger one for a run
+     that just became "resumed" (the moment the demo is about). */
+  .changed { animation: changed 1s ease-out; }
+  @keyframes changed { from { background-color: color-mix(in srgb, var(--accent) 12%, transparent); } }
+  tr.just-resumed { animation: resumed 3s ease-out; }
+  @keyframes resumed { from { background-color: var(--warn-bg); box-shadow: inset 4px 0 0 var(--warn); } }
+
+  button.replay { font-size: 0.75rem; font-weight: 500; padding: 2px 10px; border-radius: 99px; color: var(--muted); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
 <main>
 
-  <!-- 1. Header -->
   <header>
     <h1>Agent Runtime: crash-proof workflows</h1>
     <p class="lede">Kill a worker mid-refund. Watch the run survive, with exactly one refund.</p>
   </header>
 
-  <!-- 2. The problem in one look (animated by playLanes() below) -->
-  <section>
-    <h2>The problem in one look</h2>
-    <div class="card">
-      <div class="lane" id="lane-without">
-        <div class="lane-head">
-          <span class="lane-title bad">Without a durable runtime</span>
-          <span class="worker"></span>
-        </div>
-        <div class="steps">
-          <div class="step">check order</div><div class="step">issue refund</div><div class="step">notify</div>
-        </div>
-        <div class="lane-foot"><span class="note muted"></span><span class="refunds">refunds: 0</span></div>
+  <!-- ===== The problem: an ILLUSTRATION, animated by playLanes(). Not real data. ===== -->
+  <section class="illustration">
+    <div class="row">
+      <h2>The problem</h2>
+      <span class="row"><button class="replay" id="btn-replay">↻ Replay</button><span class="tag">Illustration</span></span>
+    </div>
+
+    <div class="lane" id="lane-without">
+      <div class="row"><span class="lane-title bad">Without a durable runtime</span><span class="worker"></span></div>
+      <div class="steps">
+        <div class="step">check order<small></small></div>
+        <div class="step">issue refund<small></small></div>
+        <div class="step">notify<small></small></div>
       </div>
+      <div class="counters"><span class="note muted"></span><span>work redone <b class="redone">0</b> · refunds <b class="refunds">0</b></span></div>
+    </div>
 
-      <div class="divider"><b>journal</b> = resume where you left off · <b>idempotency key</b> = never repeat a side effect</div>
-
-      <div class="lane" id="lane-with">
-        <div class="lane-head">
-          <span class="lane-title good">With Agent Runtime</span>
-          <span class="worker"></span>
-        </div>
-        <div class="steps">
-          <div class="step">check order</div><div class="step">issue refund</div><div class="step">notify</div>
-        </div>
-        <div class="lane-foot"><span class="note muted"></span><span class="refunds">refunds: 0</span></div>
+    <div class="lane" id="lane-with">
+      <div class="row"><span class="lane-title good">With Agent Runtime</span><span class="worker"></span></div>
+      <div class="steps">
+        <div class="step">check order<small></small></div>
+        <div class="step">issue refund<small></small></div>
+        <div class="step">notify<small></small></div>
       </div>
+      <div class="counters"><span class="note muted"></span><span>work redone <b class="redone">0</b> · refunds <b class="refunds">0</b></span></div>
     </div>
+
+    <div class="divider"><b>journal</b> = resume where you left off · <b>idempotency key</b> = never repeat a side effect</div>
   </section>
 
-  <!-- 3. Live stats -->
-  <section>
-    <div class="lane-head"><h2>Live stats</h2><span id="conn" class="conn muted">connecting…</span></div>
-    <div class="stats">
-      <div class="card stat"><div class="n" id="s-pending">–</div><div class="l">pending</div></div>
-      <div class="card stat"><div class="n" id="s-running">–</div><div class="l">running</div></div>
-      <div class="card stat hl"><div class="n" id="s-completed">–</div><div class="l">completed</div></div>
-      <div class="card stat"><div class="n" id="s-failed">–</div><div class="l">failed</div></div>
-      <div class="card stat hl"><div class="n" id="s-refunds">–</div><div class="l">refunds</div></div>
+  <!-- ===== Everything inside .live is the REAL SYSTEM, polled from this server. ===== -->
+  <div class="live">
+    <div class="row">
+      <h2 style="margin:0">Try it on the real system</h2>
+      <span id="conn" class="badge"><span class="dot"></span><span id="conn-text">LIVE · real server</span></span>
     </div>
-    <div id="proof" class="proof none">Completed vs refunds: equal means no run was ever refunded twice.</div>
-  </section>
 
-  <!-- 4. Buttons -->
-  <section>
-    <h2>Try it</h2>
-    <div class="actions">
-      <button class="primary" id="btn-start">Start 3 demo runs</button>
-      <button class="danger" id="btn-kill">Kill a busy worker</button>
-    </div>
-    <div id="msg"></div>
-  </section>
+    <section>
+      <h2>Live stats</h2>
+      <div class="stats">
+        <div class="card stat"><div class="n" id="s-pending">–</div><div class="l">pending</div></div>
+        <div class="card stat"><div class="n" id="s-running">–</div><div class="l">running</div></div>
+        <div class="card stat hl"><div class="n" id="s-completed">–</div><div class="l">completed</div></div>
+        <div class="card stat"><div class="n" id="s-failed">–</div><div class="l">failed</div></div>
+        <div class="card stat hl"><div class="n" id="s-refunds">–</div><div class="l">refunds</div></div>
+      </div>
+      <div id="proof" class="proof none">Completed vs refunds: equal means no run was ever refunded twice.</div>
+    </section>
 
-  <!-- 5. Live runs table -->
-  <section>
-    <h2>Recent runs</h2>
-    <div class="card table-wrap">
-      <table>
-        <thead><tr><th>run</th><th>status</th><th>steps</th><th>worker</th><th>age</th></tr></thead>
-        <tbody id="runs"><tr><td colspan="5" class="muted">No runs yet. Start some above.</td></tr></tbody>
-      </table>
-    </div>
-    <p class="small muted"><span class="takeover">↻ takeover</span> marks a run whose worker changed: another worker picked it up after a kill and resumed from the journal.</p>
-  </section>
+    <section>
+      <ol class="guide">
+        <li id="g1"><span class="num">1</span>Start 3 demo runs</li>
+        <li id="g2"><span class="num">2</span>While one is running, kill a busy worker</li>
+        <li id="g3"><span class="num">3</span>Watch below: the run resumes on another worker</li>
+      </ol>
+      <div class="actions">
+        <button class="primary" id="btn-start">Start 3 demo runs</button>
+        <button class="danger" id="btn-kill">Kill a busy worker</button>
+      </div>
+      <div id="msg"></div>
+    </section>
 
-  <!-- 6. Footer -->
-  <footer>
+    <section>
+      <h2>Recent runs</h2>
+      <div class="card table-wrap">
+        <table>
+          <thead><tr><th>run</th><th>status</th><th>steps</th><th>worker</th><th>age</th></tr></thead>
+          <tbody id="runs"><tr><td colspan="5" class="muted">No runs yet. Start some above.</td></tr></tbody>
+        </table>
+      </div>
+      <p class="small muted">
+        How to read this: <span class="pill resumed">↻ resumed</span> means a second worker finished the run after
+        the first was killed. Click a row to see which attempt completed each step; click the id for the raw JSON.
+      </p>
+    </section>
+  </div>
+
+  <footer class="row small" style="margin-top:40px; justify-content:flex-start; gap:16px">
     <a href="https://github.com/philxlz06/agent-runtime">GitHub</a>
     <a href="/docs">API docs</a>
   </footer>
 </main>
 
 <script>
-// ---------------------------------------------------------------------------
-// Section 2: the two-lane animation. Purely illustrative; no network calls.
-// Each frame says what every step box looks like, which worker is running,
-// how many refunds the "payment provider" has issued, and a short caption.
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// 1. The illustration. Purely animated, no network calls.
+// Step states: idle | active | done | crash | journal (✓ from journal) | rerun (↺ re-ran)
+// `redone` counts steps that had already finished once and ran again.
+// ===========================================================================
 const FRAMES = {
   without: [
-    { worker: "worker A", steps: ["active", "idle", "idle"], refunds: 0, note: "checking the order…" },
-    { worker: "worker A", steps: ["done", "active", "idle"], refunds: 0, note: "issuing refund…" },
-    { worker: "worker A", steps: ["done", "crash", "idle"], refunds: 1, note: "💥 crash right after the refund" },
-    { worker: "worker B", steps: ["active", "idle", "idle"], refunds: 1, note: "restart from step 1…" },
-    { worker: "worker B", steps: ["done", "active", "idle"], refunds: 1, note: "issuing refund… again" },
-    { worker: "worker B", steps: ["done", "done", "active"], refunds: 2, note: "refunded twice ✗" },
-    { worker: "worker B", steps: ["done", "done", "done"], refunds: 2, note: "customer got $50 back, not $25" },
+    { worker: "worker A", steps: ["active", "idle", "idle"], redone: 0, refunds: 0, note: "checking the order…" },
+    { worker: "worker A", steps: ["done", "active", "idle"], redone: 0, refunds: 0, note: "issuing refund…" },
+    { worker: "worker A", steps: ["done", "crash", "idle"], redone: 0, refunds: 1, note: "💥 crash right after the refund" },
+    { worker: "worker B", steps: ["active", "idle", "idle"], redone: 0, refunds: 1, note: "restart from step 1…" },
+    { worker: "worker B", steps: ["rerun", "active", "idle"], redone: 1, refunds: 1, note: "issuing refund… again" },
+    { worker: "worker B", steps: ["rerun", "rerun", "active"], redone: 2, refunds: 2, note: "refunded twice ✗" },
+    { worker: "worker B", steps: ["rerun", "rerun", "done"], redone: 2, refunds: 2, note: "$50 back instead of $25" },
   ],
   with: [
-    { worker: "worker A", steps: ["active", "idle", "idle"], refunds: 0, note: "checking the order…" },
-    { worker: "worker A", steps: ["done", "active", "idle"], refunds: 0, note: "issuing refund…" },
-    { worker: "worker A", steps: ["done", "crash", "idle"], refunds: 1, note: "💥 crash right after the refund" },
-    { worker: "worker B", steps: ["journal", "active", "idle"], refunds: 1, note: "resume from journal, retry with same key" },
-    { worker: "worker B", steps: ["journal", "active", "idle"], refunds: 1, note: "provider: key seen, returns the original refund" },
-    { worker: "worker B", steps: ["journal", "done", "active"], refunds: 1, note: "refunded once ✓" },
-    { worker: "worker B", steps: ["journal", "done", "done"], refunds: 1, note: "customer got $25 back, exactly once" },
+    { worker: "worker A", steps: ["active", "idle", "idle"], redone: 0, refunds: 0, note: "checking the order…" },
+    { worker: "worker A", steps: ["done", "active", "idle"], redone: 0, refunds: 0, note: "issuing refund…" },
+    { worker: "worker A", steps: ["done", "crash", "idle"], redone: 0, refunds: 1, note: "💥 crash right after the refund" },
+    { worker: "worker B", steps: ["journal", "active", "idle"], redone: 0, refunds: 1, note: "resume from journal, same key" },
+    { worker: "worker B", steps: ["journal", "active", "idle"], redone: 0, refunds: 1, note: "provider: key seen, no new refund" },
+    { worker: "worker B", steps: ["journal", "done", "active"], redone: 0, refunds: 1, note: "refunded once ✓" },
+    { worker: "worker B", steps: ["journal", "done", "done"], redone: 0, refunds: 1, note: "$25 back, exactly once" },
   ],
 };
+const STEP_LABEL = { journal: "✓ from journal", rerun: "↺ re-ran", crash: "💥 crashed" };
 
-function drawLane(id, frame, final) {
+function drawLane(id, f, final) {
   const lane = document.getElementById(id);
-  lane.querySelector(".worker").textContent = frame.worker;
-  lane.querySelectorAll(".step").forEach((el, i) => { el.className = "step " + frame.steps[i]; });
-  lane.querySelector(".note").textContent = frame.note;
-  const r = lane.querySelector(".refunds");
-  r.textContent = "refunds: " + frame.refunds;
-  // Colour the refund counter only at the end, when the outcome is the point.
-  r.className = "refunds" + (final ? (frame.refunds > 1 ? " bad" : " good") : "");
+  lane.querySelector(".worker").textContent = f.worker;
+  lane.querySelectorAll(".step").forEach((el, i) => {
+    el.className = "step " + f.steps[i];
+    el.querySelector("small").textContent = STEP_LABEL[f.steps[i]] || "";
+  });
+  lane.querySelector(".note").textContent = f.note;
+  // Colour the counters only at the end, when the outcome is the point.
+  const tone = (bad) => (final ? (bad ? "bad" : "good") : "");
+  const redone = lane.querySelector(".redone"), refunds = lane.querySelector(".refunds");
+  redone.textContent = f.redone;   redone.className = "redone " + tone(f.redone > 0);
+  refunds.textContent = f.refunds; refunds.className = "refunds " + tone(f.refunds > 1);
 }
 
-// Steps both lanes in lockstep, holds on the last frame, then loops.
-// (A setTimeout chain, kept separate from the data polling loop below.)
+// Both lanes step in lockstep once and stop on the last frame; "↻ Replay" restarts.
+// (A setTimeout chain, separate from the data polling loop below.)
+const LAST = FRAMES.without.length - 1;
+let laneTimer = null;
+function showFrame(i) {
+  drawLane("lane-without", FRAMES.without[i], i === LAST);
+  drawLane("lane-with", FRAMES.with[i], i === LAST);
+}
 function playLanes(i = 0) {
-  const last = FRAMES.without.length - 1;
-  drawLane("lane-without", FRAMES.without[i], i === last);
-  drawLane("lane-with", FRAMES.with[i], i === last);
-  setTimeout(() => playLanes(i === last ? 0 : i + 1), i === last ? 4000 : 1400);
+  clearTimeout(laneTimer);          // a replay mid-animation starts cleanly
+  showFrame(i);
+  if (i < LAST) laneTimer = setTimeout(() => playLanes(i + 1), 1400);
 }
+const $ = (id) => document.getElementById(id);
 
-// ---------------------------------------------------------------------------
-// API calls: one function per endpoint.
-// ---------------------------------------------------------------------------
+$("btn-replay").onclick = () => playLanes(0);
+
+
+
+// ===========================================================================
+// 2. API calls: one function per endpoint.
+// ===========================================================================
 
 // GET /demo/stats → {pending, running, completed, failed, refunds}
 async function getStats() {
@@ -251,10 +346,17 @@ async function getStats() {
   return res.json();
 }
 
-// GET /runs → [{id, status, lease_owner, created_at, steps_done, ...}], newest first
+// GET /runs → [{id, status, lease_owner, created_at, steps_done, resumed, ...}], newest first
 async function getRuns() {
   const res = await fetch("/runs?workflow=refund_demo&limit=10");
   if (!res.ok) throw new Error("runs " + res.status);
+  return res.json();
+}
+
+// GET /runs/{id} → the run plus its journal: steps [{seq, name, status, lease_version, completed_at}]
+async function getRun(id) {
+  const res = await fetch("/runs/" + id);
+  if (!res.ok) throw new Error("run " + res.status);
   return res.json();
 }
 
@@ -263,44 +365,76 @@ async function startRuns() {
   return fetch("/demo/runs?count=3", { method: "POST" });
 }
 
-// POST /demo/kill → {queued: true}; 429 if someone killed a worker in the last few seconds
+// POST /demo/kill → {queued: true}; 429 if a worker was killed in the last few seconds
 async function killWorker() {
   return fetch("/demo/kill", { method: "POST" });
 }
 
-// ---------------------------------------------------------------------------
-// Rendering
-// ---------------------------------------------------------------------------
-const $ = (id) => document.getElementById(id);
+// ===========================================================================
+// 3. Page state
+// ===========================================================================
+
+// Run ids started from this browser, tagged "yours" in the table. Kept in
+// localStorage so a reload doesn't forget them (wrapped: storage may be blocked).
+const mine = new Set((() => { try { return JSON.parse(localStorage.getItem("mine") || "[]"); } catch { return []; } })());
+function rememberMine(ids) {
+  ids.forEach((id) => mine.add(id));
+  try { localStorage.setItem("mine", JSON.stringify([...mine].slice(-50))); } catch {}
+}
+
+// Expanded rows: run id → fetched details (null while loading, Error on failure).
+// Details are fetched once when a row is opened, never by the polling loop.
+const open = new Map();
+
+// Small helper: element with a class and text (textContent, so no HTML injection).
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+// ===========================================================================
+// 4. Rendering
+// ===========================================================================
+// Restart a one-shot highlight animation on an element that stays in the DOM.
+function flash(node) {
+  node.classList.remove("changed");
+  void node.offsetWidth;            // force reflow so the animation can replay
+  node.classList.add("changed");
+}
 
 function renderStats(s) {
-  for (const k of ["pending", "running", "completed", "failed", "refunds"]) $("s-" + k).textContent = s[k];
+  // Only touch a number when it changed; skip the highlight on the first load ("–").
+  for (const k of ["pending", "running", "completed", "failed", "refunds"]) {
+    const n = $("s-" + k), v = String(s[k]);
+    if (n.textContent === v) continue;
+    if (n.textContent !== "–") flash(n.parentElement);
+    n.textContent = v;
+  }
 
   // The proof: one refund per completed run. While runs are in flight a run can
   // have issued its refund but not finished yet, so refunds may briefly sit
   // above completed, but never above completed + running.
-  const proof = $("proof");
+  let tone, text;
   if (s.completed === 0 && s.refunds === 0) {
-    proof.className = "proof none";
-    proof.textContent = "Completed vs refunds: equal means no run was ever refunded twice.";
+    tone = "none"; text = "Completed vs refunds: equal means no run was ever refunded twice.";
   } else if (s.refunds === s.completed) {
-    proof.className = "proof good";
-    proof.textContent = `✓ ${s.completed} completed, ${s.refunds} refunds: exactly one refund per run.`;
+    tone = "good"; text = `✓ ${s.completed} completed, ${s.refunds} refunds: exactly one refund per run.`;
   } else if (s.refunds <= s.completed + s.running) {
-    proof.className = "proof warn";
-    proof.textContent = `${s.completed} completed, ${s.refunds} refunds: some runs are mid-flight, refund issued but not finished yet.`;
+    tone = "warn"; text = `${s.completed} completed, ${s.refunds} refunds: some runs are mid-flight, refund issued but not finished yet.`;
   } else {
-    proof.className = "proof bad";
-    proof.textContent = `✗ ${s.refunds} refunds for ${s.completed} completed runs.`;
+    tone = "bad"; text = `✗ ${s.refunds} refunds for ${s.completed} completed runs.`;
   }
-}
+  const proof = $("proof");
+  if (proof.className !== "proof " + tone) proof.className = "proof " + tone;   // re-colour only on change
+  if (proof.textContent !== text) proof.textContent = text;
 
-// Remember the last worker seen per run, so we can spot a takeover: the run's
-// lease_owner changed from one worker to another between polls. lease_owner
-// goes null when a run finishes or its lease lapses, so we compare against the
-// last non-null owner rather than the previous poll's raw value.
-const lastOwner = new Map();   // run id → last non-null lease_owner
-const takenOver = new Map();   // run id → previous worker (kept so the mark sticks)
+  // Guided 1-2-3: emphasise step ② (and the kill button) while something is running.
+  const killNow = s.running > 0;
+  $("g2").classList.toggle("now", killNow);
+  $("btn-kill").classList.toggle("now", killNow);
+}
 
 function age(iso) {
   const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
@@ -309,71 +443,146 @@ function age(iso) {
   return Math.floor(s / 3600) + "h";
 }
 
-// Small helper: create an element with a class and text (textContent, so no HTML injection).
-function el(tag, cls, text) {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
+// Compare this poll's runs with the previous poll's and decide which rows to
+// highlight: "just-resumed" (strong) when a run's `resumed` flips to true,
+// "changed" (subtle) when its status, steps or worker changed, or it's new.
+// Age is ignored since it ticks every poll. Nothing is highlighted on first load.
+let seen = null;   // run id → {status, steps_done, lease_owner, resumed} from the last poll
+function diffRuns(runs) {
+  const marks = new Map();
+  const next = new Map();
+  for (const r of runs) {
+    const now = { status: r.status, steps_done: r.steps_done, lease_owner: r.lease_owner, resumed: r.resumed };
+    next.set(r.id, now);
+    if (!seen) continue;
+    const before = seen.get(r.id);
+    if (before && !before.resumed && now.resumed) marks.set(r.id, "just-resumed");
+    else if (!before || JSON.stringify(before) !== JSON.stringify(now)) marks.set(r.id, "changed");
+  }
+  seen = next;
+  return marks;
 }
 
-function renderRuns(runs) {
+// `marks` comes from diffRuns() on a poll; row clicks redraw with none, so
+// expanding a row never re-triggers a highlight.
+function renderRuns(runs, marks = new Map()) {
   const tbody = $("runs");
   tbody.replaceChildren();
   if (runs.length === 0) {
-    const tr = el("tr");
-    const td = el("td", "muted", "No runs yet. Start some above.");
+    const tr = el("tr"), td = el("td", "muted", "No runs yet. Start some above.");
     td.colSpan = 5;
     tr.append(td);
     tbody.append(tr);
     return;
   }
   for (const run of runs) {
-    let justTakenOver = false;
-    const prev = lastOwner.get(run.id);
-    if (run.lease_owner) {
-      if (prev && prev !== run.lease_owner) {
-        takenOver.set(run.id, prev);
-        justTakenOver = true;
-      }
-      lastOwner.set(run.id, run.lease_owner);
-    }
+    const tr = el("tr", ["run", open.has(run.id) && "open", marks.get(run.id)].filter(Boolean).join(" "));
+    tr.onclick = () => toggleRow(run.id);
 
-    const tr = el("tr", justTakenOver ? "flash" : "");
-    tr.append(el("td", "mono", run.id.slice(0, 8)));
+    // id → raw JSON in a new tab (proof it's real data); don't toggle the row.
+    const idCell = el("td", "mono");
+    const link = el("a", "", run.id.slice(0, 8));
+    link.href = "/runs/" + run.id;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.onclick = (e) => e.stopPropagation();
+    idCell.append(link);
+    tr.append(idCell);
 
     const st = el("td");
     st.append(el("span", "pill " + run.status, run.status));
+    if (run.resumed) st.append(el("span", "pill resumed", "↻ resumed"));
+    if (mine.has(run.id)) st.append(el("span", "pill yours", "yours"));
     tr.append(st);
 
-    const steps = el("td");
-    const bar = el("span", "bar");
-    const fill = el("i");
+    const steps = el("td"), bar = el("span", "bar"), fill = el("i");
     fill.style.width = (Math.min(run.steps_done, 3) / 3) * 100 + "%";
     bar.append(fill);
     steps.append(bar, el("span", "small muted", " " + run.steps_done + "/3"));
     tr.append(steps);
 
-    const worker = el("td", "mono", run.lease_owner || "–");
-    if (takenOver.has(run.id)) {
-      worker.append(el("span", "takeover", " ↻ from " + takenOver.get(run.id)));
-    }
-    tr.append(worker);
-
+    tr.append(el("td", "mono", run.lease_owner || "–"));
     tr.append(el("td", "num", age(run.created_at)));
     tbody.append(tr);
+
+    if (open.has(run.id)) tbody.append(detailsRow(run.id));
   }
 }
 
-function setConnected(ok) {
-  const c = $("conn");
-  c.className = "conn " + (ok ? "ok muted" : "err");
-  c.textContent = ok ? "live" : "reconnecting…";
+// The expanded row under a run: its journal, one line per step, coloured by attempt.
+function detailsRow(id) {
+  const tr = el("tr", "details"), td = el("td");
+  td.colSpan = 5;
+  tr.append(td);
+
+  const data = open.get(id);
+  if (data === null) { td.append(el("span", "muted small", "Loading journal…")); return tr; }
+  if (data instanceof Error) { td.append(el("span", "small", "Couldn't load this run. Click the row to retry.")); return tr; }
+
+  const list = el("div", "jsteps");
+  for (const s of data.steps) {
+    // lease_version = which claim of the run (attempt) completed the step; null = not finished yet.
+    const done = s.status === "completed";
+    const row = el("div", "jstep" + (s.lease_version ? " a" + (((s.lease_version - 1) % 3) + 1) : ""));
+    row.append(
+      el("span", "muted", s.seq + "."),
+      el("span", "", s.name + (done ? "" : " (in progress)")),
+      el("span", "att", s.lease_version ? "attempt " + s.lease_version : "–"),
+      el("span", "muted small", s.completed_at ? new Date(s.completed_at).toLocaleTimeString() : "–"),
+    );
+    list.append(row);
+  }
+  if (data.steps.length === 0) list.append(el("span", "muted small", "No steps journaled yet."));
+  td.append(list, el("div", "caption muted", caption(data.steps)),
+            el("div", "small muted", "Snapshot from " + data.fetchedAt + ". Collapse and reopen to refresh."));
+  return tr;
 }
 
-// ---------------------------------------------------------------------------
-// Buttons
-// ---------------------------------------------------------------------------
+// Turn the steps into one sentence, e.g.
+// "Step 1 was finished by attempt 1 and NOT redone; steps 2–3 by attempt 2 after the takeover."
+function caption(steps) {
+  const done = steps.filter((s) => s.lease_version);
+  if (done.length === 0) return "No step has finished yet.";
+  // Group consecutive steps finished by the same attempt.
+  const groups = [];
+  for (const s of done) {
+    const g = groups[groups.length - 1];
+    if (g && g.attempt === s.lease_version) g.last = s.seq;
+    else groups.push({ attempt: s.lease_version, first: s.seq, last: s.seq });
+  }
+  const label = (g) => g.first === g.last ? `step ${g.first}` : `steps ${g.first}–${g.last}`;
+  if (groups.length === 1) {
+    return `All finished steps (${label(groups[0])}) were done by attempt ${groups[0].attempt}: no takeover.`;
+  }
+  const [head, ...rest] = groups;
+  const firstPart = `${label(head)[0].toUpperCase()}${label(head).slice(1)} ${head.first === head.last ? "was" : "were"} finished by attempt ${head.attempt} and NOT redone`;
+  return firstPart + "; " + rest.map((g) => `${label(g)} by attempt ${g.attempt} after the takeover`).join("; ") + ".";
+}
+
+function setConnected(ok) {
+  $("conn").classList.toggle("err", !ok);
+  $("conn-text").textContent = ok ? "LIVE · real server" : "reconnecting…";
+}
+
+// ===========================================================================
+// 5. Interactions
+// ===========================================================================
+
+// Open/close a row. Opening fetches GET /runs/{id} once; the poll only redraws it.
+async function toggleRow(id) {
+  if (open.has(id) && !(open.get(id) instanceof Error)) { open.delete(id); renderRuns(lastRuns); return; }
+  open.set(id, null);               // show "loading" right away
+  renderRuns(lastRuns);
+  try {
+    const data = await getRun(id);
+    data.fetchedAt = new Date().toLocaleTimeString();
+    if (open.has(id)) open.set(id, data);   // only if still open
+  } catch (e) {
+    if (open.has(id)) open.set(id, e);
+  }
+  renderRuns(lastRuns);             // redraw from the last poll's data; no extra fetch
+}
+
 function showMsg(text, isError) {
   const m = $("msg");
   m.textContent = text;
@@ -381,8 +590,8 @@ function showMsg(text, isError) {
 }
 
 // Shared click handler: disable both buttons while a request is in flight,
-// show the server's "detail" on 429, refresh the view right after success.
-async function act(call, okText) {
+// show the server's "detail" on 429, refresh right after success.
+async function act(call, onOk) {
   const buttons = [$("btn-start"), $("btn-kill")];
   buttons.forEach((b) => (b.disabled = true));
   try {
@@ -393,7 +602,7 @@ async function act(call, okText) {
     } else if (!res.ok) {
       showMsg("Request failed (" + res.status + ").", true);
     } else {
-      showMsg(okText, false);
+      showMsg(onOk(await res.json().catch(() => ({}))), false);
       poll();
     }
   } catch {
@@ -403,21 +612,26 @@ async function act(call, okText) {
   }
 }
 
-$("btn-start").onclick = () => act(startRuns, "Started 3 runs. Kill a worker while they're running.");
-$("btn-kill").onclick = () => act(killWorker, "Kill queued. Watch for a ↻ takeover in the table.");
+$("btn-start").onclick = () => act(startRuns, (body) => {
+  rememberMine(body.ids || []);
+  return "Started 3 runs (tagged “yours” below). Now kill a worker while one is running.";
+});
+$("btn-kill").onclick = () => act(killWorker, () => "Kill queued. Watch for ↻ resumed in the table.");
 
-// ---------------------------------------------------------------------------
-// The polling loop: every 2s fetch stats + runs together.
+// ===========================================================================
+// 6. The polling loop: every 2s fetch stats + runs together.
 // `busy` skips a tick if the previous one hasn't returned yet (slow network).
-// ---------------------------------------------------------------------------
+// ===========================================================================
 let busy = false;
+let lastRuns = [];   // kept so row clicks can redraw without refetching
 async function poll() {
   if (busy) return;
   busy = true;
   try {
     const [stats, runs] = await Promise.all([getStats(), getRuns()]);
+    lastRuns = runs;
     renderStats(stats);
-    renderRuns(runs);
+    renderRuns(runs, diffRuns(runs));
     setConnected(true);
   } catch {
     setConnected(false);   // keep the last data on screen; the next tick retries
@@ -426,7 +640,10 @@ async function poll() {
   }
 }
 
-playLanes();
+// Play the illustration once; with reduced motion, just show the outcome
+// (Replay still steps through it on request, without CSS transitions).
+if (matchMedia("(prefers-reduced-motion: reduce)").matches) showFrame(LAST);
+else playLanes();
 poll();
 setInterval(poll, 2000);
 </script>
