@@ -185,3 +185,19 @@ async def test_demo_kill_queues_a_request_with_cooldown(client, conn):
     assert (await client.post("/demo/kill")).status_code == 429      # cooldown
     cur = await conn.execute("SELECT count(*) FROM kill_requests")
     assert (await cur.fetchone())[0] == 1
+
+
+@pytest.mark.asyncio
+async def test_home_serves_the_page(client):
+    r = await client.get("/")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+
+
+@pytest.mark.asyncio
+async def test_runs_filter_by_workflow(client, conn):
+    await start_run(conn, "refund_demo", {"order_id": "A"})
+    await start_run(conn, "other", {})
+    r = await client.get("/runs?workflow=refund_demo")
+    assert [run["workflow_name"] for run in r.json()] == ["refund_demo"]
+    assert r.json()[0]["steps_done"] == 0
