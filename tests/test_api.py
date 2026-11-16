@@ -153,6 +153,8 @@ async def test_writes_need_the_admin_key(client):
 def reset_rate_limits():
     api.demo_start_limit.hits.clear() 
     api.demo_kill_limit.hits.clear()         # each test starts with a clean limiter
+    api.agent_limit.hits.clear()
+    api.agent_daily_limit.hits.clear()
 
 
 @pytest.mark.asyncio
@@ -213,3 +215,27 @@ async def test_runs_list_marks_resumed_runs(client, conn):
     )
     r = await client.get("/runs")
     assert r.json()[0]["resumed"] is True                 # steps finished by 2 attempts = resumed
+
+
+@pytest.mark.asyncio
+async def test_demo_support_starts_a_demo_agent_run(client, conn):
+    r = await client.post("/demo/support", json={"message": "I was charged twice"})
+    assert r.status_code == 201
+    cur = await conn.execute("SELECT input->>'source' FROM runs WHERE id = %s", (r.json()["id"],))
+    assert (await cur.fetchone())[0] == "demo"
+    assert (await client.post("/demo/support", json={"message": "x" * 301})).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_visitors_can_only_decide_demo_runs(client, conn):
+    real = await start_run(conn, "support_agent", {"message": "hi", "source": "api"})
+    r = await client.post(f"/runs/{real}/approvals/2", json={"approved": True}, headers={"X-Admin-Key": ""})
+    assert r.status_code == 401
+    r = await client.post(f"/demo/support/{real}/decision", json={"approved": True})
+    assert r.status_code == 404
+
+    demo = await start_run(conn, "support_agent", {"message": "refund pls", "source": "demo"})
+    await conn.execute("UPDATE runs SET status = 'waiting_approval' WHERE id = %s", (demo,))
+    await conn.execute("INSERT INTO approvals (run_id, seq, prompt) VALUES (%s, 2, 'Refund $25?')", (demo,))
+    r = await client.post(f"/demo/support/{demo}/decision", json={"approved": True})
+    assert r.status_code == 200

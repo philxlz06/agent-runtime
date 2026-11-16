@@ -16,6 +16,7 @@ import os
 import secrets
 from pathlib import Path
 from fastapi.responses import FileResponse
+from pydantic import Field
 
 
 def require_admin(x_admin_key: str | None = Header(default=None)):
@@ -181,3 +182,44 @@ STATIC = Path(__file__).parent / "static"
 @app.get("/", include_in_schema=False)
 async def home():
     return FileResponse(STATIC / "index.html")
+
+
+agent_limit = RateLimiter(limit=3, per_seconds=60)             # per visitor
+agent_daily_limit = RateLimiter(limit=200, per_seconds=86400)   # everyone combined, per day
+
+
+class SupportMessage(BaseModel):
+    message: str = Field(min_length=3, max_length=300)
+
+
+@app.post("/demo/support", status_code=201)
+async def demo_support(request: Request, body: SupportMessage, conn=Depends(get_conn)):
+    if not agent_limit.allow(request.client.host):
+        raise HTTPException(status_code=429, detail="slow down: 3 agent messages per minute")
+    if not agent_daily_limit.allow("global"):
+        raise HTTPException(status_code=429, detail="the agent demo hit today's limit, try tomorrow")
+    order_id = f"D-{secrets.token_hex(3)}"
+    run_id = await start_run(
+        conn, "support_agent", {"message": body.message, "order_id": order_id, "source": "demo"}
+    )
+    return {"id": run_id}
+
+
+@app.post("/demo/support/{run_id}/decision")
+async def demo_support_decision(run_id: UUID, body: Decision, conn=Depends(get_conn)):
+    cur = await conn.execute(
+        "SELECT input->>'source' FROM runs WHERE id = %s AND workflow_name = 'support_agent'",
+        (run_id,),
+    )
+    row = await cur.fetchone()
+    if row is None or row[0] != "demo":
+        raise HTTPException(status_code=404, detail="not a demo agent run")
+    cur = await conn.execute(
+        "SELECT seq FROM approvals WHERE run_id = %s AND status = 'pending'", (run_id,)
+    )
+    pending = await cur.fetchone()
+    if pending is None or not await decide(
+        conn, run_id, pending[0], body.approved, "demo visitor (playing staff)"
+    ):
+        raise HTTPException(status_code=409, detail="no pending approval for this run")
+    return {"ok": True}
