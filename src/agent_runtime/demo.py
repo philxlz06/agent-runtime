@@ -3,7 +3,8 @@ import os
 from agent_runtime.context import current_run
 from agent_runtime.step import idempotency_key, step
 from agent_runtime.workflow import workflow
-
+from agent_runtime import llm
+from agent_runtime.approval import require_approval
 
 @step
 async def greet(name):
@@ -61,3 +62,41 @@ async def refund_demo(order_id):
     refund_id = await issue_refund(order)      # step 2: ~2s, the side effect
     await notify_customer(order_id)            # step 3: ~2s
     return {"refund_id": refund_id}
+
+
+CATEGORIES = {"refund", "bug", "question"}
+
+
+@step(timeout=30)
+async def classify(message):
+    answer = await llm.ask(
+        "Classify this customer message as exactly one word: refund, bug, or question.\n\n"
+        f"Message: {message}",
+        max_tokens=5,
+    )
+    word = answer.lower().strip(" .")
+    return word if word in CATEGORIES else "question"      # never trust free text blindly
+
+
+@step(timeout=30)
+async def draft_reply(message, category, refunded):
+    outcome = "A $25 refund was issued." if refunded else "No refund was issued."
+    return await llm.ask(
+        f"Write a short, friendly 2-sentence reply to this customer. "
+        f"Category: {category}. {outcome}\n\nMessage: {message}",
+        max_tokens=150,
+    )
+
+
+@workflow
+async def support_agent(message, order_id="D-0000"):
+    category = await classify(message)
+    refunded = False
+    if category == "refund":
+        ok = await require_approval(f"Refund $25 for order {order_id}? Customer said: {message[:200]}")
+        if ok:
+            order = await check_order(order_id)
+            await issue_refund(order)
+            refunded = True
+    reply = await draft_reply(message, category, refunded)
+    return {"category": category, "refunded": refunded, "reply": reply}
