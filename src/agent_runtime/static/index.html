@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Runtime</title>
+<meta name="description" content="Kill a worker mid-refund. Watch the run survive, with exactly one refund.">
+<style>
+  :root {
+    --bg: #fafaf9; --surface: #ffffff; --text: #1c1917; --muted: #6b6560; --border: #e7e5e4;
+    --accent: #2563eb; --good: #15803d; --good-bg: #dcfce7; --bad: #b91c1c; --bad-bg: #fee2e2;
+    --warn: #a16207; --warn-bg: #fef9c3; --idle: #e7e5e4;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0c0c0d; --surface: #17171a; --text: #ececec; --muted: #9a9aa2; --border: #2a2a30;
+      --accent: #60a5fa; --good: #4ade80; --good-bg: #13301e; --bad: #f87171; --bad-bg: #3a1616;
+      --warn: #facc15; --warn-bg: #332b0a; --idle: #2a2a30;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: clamp(1.6rem, 5vw, 2.2rem); line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.02em; }
+  h2 { font-size: 1.05rem; margin: 0 0 12px; }
+  .lede { color: var(--muted); margin: 0; font-size: 1.1rem; }
+  section { margin-top: 36px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 0.85rem; }
+  code, .mono { font-family: var(--mono); font-size: 0.85em; }
+
+  /* ---- 2. problem lanes ---- */
+  .lane { display: grid; gap: 10px; }
+  .lane-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .lane-title { font-weight: 600; }
+  .lane-title.bad { color: var(--bad); }
+  .lane-title.good { color: var(--good); }
+  .worker { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .step {
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 6px; text-align: center;
+    font-size: 0.8rem; transition: background .3s, border-color .3s, opacity .3s; position: relative;
+  }
+  .step.idle { opacity: 0.5; }
+  .step.active { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .step.done { background: var(--good-bg); border-color: transparent; }
+  .step.journal { background: var(--good-bg); border-color: transparent; opacity: 0.6; }
+  .step.crash { background: var(--bad-bg); border-color: var(--bad); }
+  .lane-foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 0.85rem; min-height: 1.5em; }
+  .refunds { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .refunds.bad { color: var(--bad); }
+  .refunds.good { color: var(--good); }
+  .divider {
+    text-align: center; margin: 14px 0; font-size: 0.85rem; color: var(--muted);
+    padding: 8px; border-top: 1px dashed var(--border); border-bottom: 1px dashed var(--border);
+  }
+  .divider b { color: var(--text); font-weight: 600; }
+
+  /* ---- 3. stats ---- */
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .stat { text-align: center; padding: 10px 4px; }
+  .stat .n { font-size: 1.6rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .stat.hl { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .proof { margin-top: 10px; padding: 10px 14px; border-radius: 10px; font-size: 0.95rem; }
+  .proof.good { background: var(--good-bg); color: var(--good); }
+  .proof.warn { background: var(--warn-bg); color: var(--warn); }
+  .proof.bad  { background: var(--bad-bg);  color: var(--bad); }
+  .proof.none { background: var(--idle); color: var(--muted); }
+  @media (max-width: 520px) {
+    .stats { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  /* ---- 4. buttons ---- */
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  button {
+    font: inherit; font-weight: 600; padding: 10px 16px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--bad); border-color: var(--bad); }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  #msg { min-height: 1.5em; margin-top: 8px; font-size: 0.9rem; color: var(--muted); }
+  #msg.error { color: var(--warn); }
+
+  /* ---- 5. runs table ---- */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 500; }
+  td.num { font-variant-numeric: tabular-nums; color: var(--muted); }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 0.78rem; background: var(--idle); }
+  .pill.running   { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+  .pill.completed { background: var(--good-bg); color: var(--good); }
+  .pill.failed    { background: var(--bad-bg); color: var(--bad); }
+  .bar { width: 80px; height: 6px; border-radius: 3px; background: var(--idle); overflow: hidden; display: inline-block; vertical-align: middle; }
+  .bar > i { display: block; height: 100%; background: var(--good); transition: width .4s; }
+  .takeover { color: var(--warn); font-weight: 600; }
+  tr.flash { animation: flash 2s ease-out; }
+  @keyframes flash { from { background: var(--warn-bg); } to { background: transparent; } }
+  .conn { font-size: 0.8rem; }
+  .conn.ok::before  { content: "● "; color: var(--good); }
+  .conn.err { color: var(--warn); }
+  .conn.err::before { content: "● "; }
+
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 0.9rem; display: flex; gap: 16px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+
+  <!-- 1. Header -->
+  <header>
+    <h1>Agent Runtime: crash-proof workflows</h1>
+    <p class="lede">Kill a worker mid-refund. Watch the run survive, with exactly one refund.</p>
+  </header>
+
+  <!-- 2. The problem in one look (animated by playLanes() below) -->
+  <section>
+    <h2>The problem in one look</h2>
+    <div class="card">
+      <div class="lane" id="lane-without">
+        <div class="lane-head">
+          <span class="lane-title bad">Without a durable runtime</span>
+          <span class="worker"></span>
+        </div>
+        <div class="steps">
+          <div class="step">check order</div><div class="step">issue refund</div><div class="step">notify</div>
+        </div>
+        <div class="lane-foot"><span class="note muted"></span><span class="refunds">refunds: 0</span></div>
+      </div>
+
+      <div class="divider"><b>journal</b> = resume where you left off · <b>idempotency key</b> = never repeat a side effect</div>
+
+      <div class="lane" id="lane-with">
+        <div class="lane-head">
+          <span class="lane-title good">With Agent Runtime</span>
+          <span class="worker"></span>
+        </div>
+        <div class="steps">
+          <div class="step">check order</div><div class="step">issue refund</div><div class="step">notify</div>
+        </div>
+        <div class="lane-foot"><span class="note muted"></span><span class="refunds">refunds: 0</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Live stats -->
+  <section>
+    <div class="lane-head"><h2>Live stats</h2><span id="conn" class="conn muted">connecting…</span></div>
+    <div class="stats">
+      <div class="card stat"><div class="n" id="s-pending">–</div><div class="l">pending</div></div>
+      <div class="card stat"><div class="n" id="s-running">–</div><div class="l">running</div></div>
+      <div class="card stat hl"><div class="n" id="s-completed">–</div><div class="l">completed</div></div>
+      <div class="card stat"><div class="n" id="s-failed">–</div><div class="l">failed</div></div>
+      <div class="card stat hl"><div class="n" id="s-refunds">–</div><div class="l">refunds</div></div>
+    </div>
+    <div id="proof" class="proof none">Completed vs refunds: equal means no run was ever refunded twice.</div>
+  </section>
+
+  <!-- 4. Buttons -->
+  <section>
+    <h2>Try it</h2>
+    <div class="actions">
+      <button class="primary" id="btn-start">Start 3 demo runs</button>
+      <button class="danger" id="btn-kill">Kill a busy worker</button>
+    </div>
+    <div id="msg"></div>
+  </section>
+
+  <!-- 5. Live runs table -->
+  <section>
+    <h2>Recent runs</h2>
+    <div class="card table-wrap">
+      <table>
+        <thead><tr><th>run</th><th>status</th><th>steps</th><th>worker</th><th>age</th></tr></thead>
+        <tbody id="runs"><tr><td colspan="5" class="muted">No runs yet. Start some above.</td></tr></tbody>
+      </table>
+    </div>
+    <p class="small muted"><span class="takeover">↻ takeover</span> marks a run whose worker changed: another worker picked it up after a kill and resumed from the journal.</p>
+  </section>
+
+  <!-- 6. Footer -->
+  <footer>
+    <a href="https://github.com/philxlz06/agent-runtime">GitHub</a>
+    <a href="/docs">API docs</a>
+  </footer>
+</main>
+
+<script>
+// ---------------------------------------------------------------------------
+// Section 2: the two-lane animation. Purely illustrative; no network calls.
+// Each frame says what every step box looks like, which worker is running,
+// how many refunds the "payment provider" has issued, and a short caption.
+// ---------------------------------------------------------------------------
+const FRAMES = {
+  without: [
+    { worker: "worker A", steps: ["active", "idle", "idle"], refunds: 0, note: "checking the order…" },
+    { worker: "worker A", steps: ["done", "active", "idle"], refunds: 0, note: "issuing refund…" },
+    { worker: "worker A", steps: ["done", "crash", "idle"], refunds: 1, note: "💥 crash right after the refund" },
+    { worker: "worker B", steps: ["active", "idle", "idle"], refunds: 1, note: "restart from step 1…" },
+    { worker: "worker B", steps: ["done", "active", "idle"], refunds: 1, note: "issuing refund… again" },
+    { worker: "worker B", steps: ["done", "done", "active"], refunds: 2, note: "refunded twice ✗" },
+    { worker: "worker B", steps: ["done", "done", "done"], refunds: 2, note: "customer got $50 back, not $25" },
+  ],
+  with: [
+    { worker: "worker A", steps: ["active", "idle", "idle"], refunds: 0, note: "checking the order…" },
+    { worker: "worker A", steps: ["done", "active", "idle"], refunds: 0, note: "issuing refund…" },
+    { worker: "worker A", steps: ["done", "crash", "idle"], refunds: 1, note: "💥 crash right after the refund" },
+    { worker: "worker B", steps: ["journal", "active", "idle"], refunds: 1, note: "resume from journal, retry with same key" },
+    { worker: "worker B", steps: ["journal", "active", "idle"], refunds: 1, note: "provider: key seen, returns the original refund" },
+    { worker: "worker B", steps: ["journal", "done", "active"], refunds: 1, note: "refunded once ✓" },
+    { worker: "worker B", steps: ["journal", "done", "done"], refunds: 1, note: "customer got $25 back, exactly once" },
+  ],
+};
+
+function drawLane(id, frame, final) {
+  const lane = document.getElementById(id);
+  lane.querySelector(".worker").textContent = frame.worker;
+  lane.querySelectorAll(".step").forEach((el, i) => { el.className = "step " + frame.steps[i]; });
+  lane.querySelector(".note").textContent = frame.note;
+  const r = lane.querySelector(".refunds");
+  r.textContent = "refunds: " + frame.refunds;
+  // Colour the refund counter only at the end, when the outcome is the point.
+  r.className = "refunds" + (final ? (frame.refunds > 1 ? " bad" : " good") : "");
+}
+
+// Steps both lanes in lockstep, holds on the last frame, then loops.
+// (A setTimeout chain, kept separate from the data polling loop below.)
+function playLanes(i = 0) {
+  const last = FRAMES.without.length - 1;
+  drawLane("lane-without", FRAMES.without[i], i === last);
+  drawLane("lane-with", FRAMES.with[i], i === last);
+  setTimeout(() => playLanes(i === last ? 0 : i + 1), i === last ? 4000 : 1400);
+}
+
+// ---------------------------------------------------------------------------
+// API calls: one function per endpoint.
+// ---------------------------------------------------------------------------
+
+// GET /demo/stats → {pending, running, completed, failed, refunds}
+async function getStats() {
+  const res = await fetch("/demo/stats");
+  if (!res.ok) throw new Error("stats " + res.status);
+  return res.json();
+}
+
+// GET /runs → [{id, status, lease_owner, created_at, steps_done, ...}], newest first
+async function getRuns() {
+  const res = await fetch("/runs?workflow=refund_demo&limit=10");
+  if (!res.ok) throw new Error("runs " + res.status);
+  return res.json();
+}
+
+// POST /demo/runs?count=3 → {ids: [...]}; 429 when rate-limited or the backlog is full
+async function startRuns() {
+  return fetch("/demo/runs?count=3", { method: "POST" });
+}
+
+// POST /demo/kill → {queued: true}; 429 if someone killed a worker in the last few seconds
+async function killWorker() {
+  return fetch("/demo/kill", { method: "POST" });
+}
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+
+function renderStats(s) {
+  for (const k of ["pending", "running", "completed", "failed", "refunds"]) $("s-" + k).textContent = s[k];
+
+  // The proof: one refund per completed run. While runs are in flight a run can
+  // have issued its refund but not finished yet, so refunds may briefly sit
+  // above completed, but never above completed + running.
+  const proof = $("proof");
+  if (s.completed === 0 && s.refunds === 0) {
+    proof.className = "proof none";
+    proof.textContent = "Completed vs refunds: equal means no run was ever refunded twice.";
+  } else if (s.refunds === s.completed) {
+    proof.className = "proof good";
+    proof.textContent = `✓ ${s.completed} completed, ${s.refunds} refunds: exactly one refund per run.`;
+  } else if (s.refunds <= s.completed + s.running) {
+    proof.className = "proof warn";
+    proof.textContent = `${s.completed} completed, ${s.refunds} refunds: some runs are mid-flight, refund issued but not finished yet.`;
+  } else {
+    proof.className = "proof bad";
+    proof.textContent = `✗ ${s.refunds} refunds for ${s.completed} completed runs.`;
+  }
+}
+
+// Remember the last worker seen per run, so we can spot a takeover: the run's
+// lease_owner changed from one worker to another between polls. lease_owner
+// goes null when a run finishes or its lease lapses, so we compare against the
+// last non-null owner rather than the previous poll's raw value.
+const lastOwner = new Map();   // run id → last non-null lease_owner
+const takenOver = new Map();   // run id → previous worker (kept so the mark sticks)
+
+function age(iso) {
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
+  if (s < 60) return s + "s";
+  if (s < 3600) return Math.floor(s / 60) + "m";
+  return Math.floor(s / 3600) + "h";
+}
+
+// Small helper: create an element with a class and text (textContent, so no HTML injection).
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function renderRuns(runs) {
+  const tbody = $("runs");
+  tbody.replaceChildren();
+  if (runs.length === 0) {
+    const tr = el("tr");
+    const td = el("td", "muted", "No runs yet. Start some above.");
+    td.colSpan = 5;
+    tr.append(td);
+    tbody.append(tr);
+    return;
+  }
+  for (const run of runs) {
+    let justTakenOver = false;
+    const prev = lastOwner.get(run.id);
+    if (run.lease_owner) {
+      if (prev && prev !== run.lease_owner) {
+        takenOver.set(run.id, prev);
+        justTakenOver = true;
+      }
+      lastOwner.set(run.id, run.lease_owner);
+    }
+
+    const tr = el("tr", justTakenOver ? "flash" : "");
+    tr.append(el("td", "mono", run.id.slice(0, 8)));
+
+    const st = el("td");
+    st.append(el("span", "pill " + run.status, run.status));
+    tr.append(st);
+
+    const steps = el("td");
+    const bar = el("span", "bar");
+    const fill = el("i");
+    fill.style.width = (Math.min(run.steps_done, 3) / 3) * 100 + "%";
+    bar.append(fill);
+    steps.append(bar, el("span", "small muted", " " + run.steps_done + "/3"));
+    tr.append(steps);
+
+    const worker = el("td", "mono", run.lease_owner || "–");
+    if (takenOver.has(run.id)) {
+      worker.append(el("span", "takeover", " ↻ from " + takenOver.get(run.id)));
+    }
+    tr.append(worker);
+
+    tr.append(el("td", "num", age(run.created_at)));
+    tbody.append(tr);
+  }
+}
+
+function setConnected(ok) {
+  const c = $("conn");
+  c.className = "conn " + (ok ? "ok muted" : "err");
+  c.textContent = ok ? "live" : "reconnecting…";
+}
+
+// ---------------------------------------------------------------------------
+// Buttons
+// ---------------------------------------------------------------------------
+function showMsg(text, isError) {
+  const m = $("msg");
+  m.textContent = text;
+  m.className = isError ? "error" : "";
+}
+
+// Shared click handler: disable both buttons while a request is in flight,
+// show the server's "detail" on 429, refresh the view right after success.
+async function act(call, okText) {
+  const buttons = [$("btn-start"), $("btn-kill")];
+  buttons.forEach((b) => (b.disabled = true));
+  try {
+    const res = await call();
+    if (res.status === 429) {
+      const body = await res.json().catch(() => ({}));
+      showMsg(body.detail || "Too many requests, try again shortly.", true);
+    } else if (!res.ok) {
+      showMsg("Request failed (" + res.status + ").", true);
+    } else {
+      showMsg(okText, false);
+      poll();
+    }
+  } catch {
+    showMsg("Network error, reconnecting…", true);
+  } finally {
+    buttons.forEach((b) => (b.disabled = false));
+  }
+}
+
+$("btn-start").onclick = () => act(startRuns, "Started 3 runs. Kill a worker while they're running.");
+$("btn-kill").onclick = () => act(killWorker, "Kill queued. Watch for a ↻ takeover in the table.");
+
+// ---------------------------------------------------------------------------
+// The polling loop: every 2s fetch stats + runs together.
+// `busy` skips a tick if the previous one hasn't returned yet (slow network).
+// ---------------------------------------------------------------------------
+let busy = false;
+async function poll() {
+  if (busy) return;
+  busy = true;
+  try {
+    const [stats, runs] = await Promise.all([getStats(), getRuns()]);
+    renderStats(stats);
+    renderRuns(runs);
+    setConnected(true);
+  } catch {
+    setConnected(false);   // keep the last data on screen; the next tick retries
+  } finally {
+    busy = false;
+  }
+}
+
+playLanes();
+poll();
+setInterval(poll, 2000);
+</script>
+</body>
+</html>
