@@ -38,12 +38,25 @@
   .mono { font-family: var(--mono); font-size: 0.85em; }
   .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-  /* ================= "The problem": an ILLUSTRATION (muted, smaller) ================= */
-  .illustration {
-    border: 1px dashed var(--border); border-radius: 12px; padding: 14px;
-    font-size: 0.88rem; background: transparent;
+  /* Section headings shared by every part below the title */
+  .eyebrow { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; }
+  .intro { margin: 0 0 4px; color: var(--muted); }
+
+  /* ================= 1. THE PROBLEM: the hero (an ILLUSTRATION, not live data) ================= */
+  .hero {
+    margin-top: 28px; border: 2px solid var(--text); border-radius: 16px; padding: 24px 20px;
+    background: var(--surface);
   }
-  .illustration h2 { font-size: 0.95rem; margin: 0; color: var(--muted); }
+  .hero h2 { font-size: clamp(1.3rem, 4vw, 1.6rem); line-height: 1.25; margin: 0; letter-spacing: -0.01em; }
+  .hero .lane { margin-top: 20px; }
+  .hero .step { font-size: 0.9rem; padding: 10px 4px; }
+  .hero .counters { font-size: 0.88rem; }
+
+  /* ================= 2. HOW IT WORKS: three short items ================= */
+  .how { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .how .card { font-size: 0.9rem; padding: 12px 14px; }
+  .how b { display: block; margin-bottom: 2px; }
+  @media (max-width: 640px) { .how { grid-template-columns: 1fr; } }
   .tag {
     font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
     border: 1px solid var(--border); border-radius: 99px; padding: 1px 8px;
@@ -70,15 +83,9 @@
   .counters b { font-variant-numeric: tabular-nums; }
   .counters .bad { color: var(--bad); }
   .counters .good { color: var(--good); }
-  .divider {
-    text-align: center; margin: 12px 0 0; font-size: 0.8rem; color: var(--muted);
-    padding: 6px; border-top: 1px dashed var(--border);
-  }
-  .divider b { color: var(--text); font-weight: 600; }
-
-  /* ================= Everything below: the REAL SYSTEM ================= */
+  /* ================= Parts 1 and 2: the REAL SYSTEM ================= */
   .live {
-    margin-top: 32px; border: 2px solid var(--live); border-radius: 16px; padding: 20px 16px;
+    margin-top: 40px; border: 2px solid var(--live); border-radius: 16px; padding: 20px 16px;
     background: color-mix(in srgb, var(--live) 4%, var(--surface));
   }
   .live > section:first-of-type { margin-top: 16px; }
@@ -175,6 +182,27 @@
   tr.just-resumed { animation: resumed 3s ease-out; }
   @keyframes resumed { from { background-color: var(--warn-bg); box-shadow: inset 4px 0 0 var(--warn); } }
 
+  /* ================= Part 2: the support agent ================= */
+  textarea {
+    width: 100%; font: inherit; padding: 10px 12px; border-radius: 10px; resize: vertical;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 12px; }
+  button.chip { font-size: 0.8rem; font-weight: 500; padding: 4px 12px; border-radius: 99px; color: var(--muted); }
+  #agent-msg { min-height: 1.5em; margin-top: 8px; font-size: 0.9rem; color: var(--warn); }
+  .timeline { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+  .timeline > li { padding: 10px 14px; }
+  .timeline .head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-weight: 600; }
+  .timeline .wait { color: var(--muted); font-weight: 400; }
+  /* who did the step: Claude (AI) or plain code */
+  .who { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; border-radius: 99px; padding: 1px 8px; border: 1px solid; }
+  .who.claude { color: var(--accent); }
+  .who.code { color: var(--muted); font-family: var(--mono); font-weight: 500; }
+  .quote { margin: 8px 0 0; padding: 8px 12px; border-left: 3px solid var(--accent); font-style: italic; }
+  .approval { border: 2px solid var(--warn); background: var(--warn-bg); }
+  .approval .label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; color: var(--warn); }
+  .approval .prompt { margin: 6px 0; font-weight: 600; }
+
   button.replay { font-size: 0.75rem; font-weight: 500; padding: 2px 10px; border-radius: 99px; color: var(--muted); }
 
   @media (prefers-reduced-motion: reduce) {
@@ -190,10 +218,11 @@
     <p class="lede">Kill a worker mid-refund. Watch the run survive, with exactly one refund.</p>
   </header>
 
-  <!-- ===== The problem: an ILLUSTRATION, animated by playLanes(). Not real data. ===== -->
-  <section class="illustration">
-    <div class="row">
-      <h2>The problem</h2>
+  <!-- ===== The problem: the hero. An ILLUSTRATION, animated by playLanes(). Not real data. ===== -->
+  <section class="hero">
+    <p class="eyebrow">The problem</p>
+    <div class="row" style="align-items:flex-start">
+      <h2>What goes wrong when a worker crashes mid-task</h2>
       <span class="row"><button class="replay" id="btn-replay">↻ Replay</button><span class="tag">Illustration</span></span>
     </div>
 
@@ -217,13 +246,23 @@
       <div class="counters"><span class="note muted"></span><span>work redone <b class="redone">0</b> · refunds <b class="refunds">0</b></span></div>
     </div>
 
-    <div class="divider"><b>journal</b> = resume where you left off · <b>idempotency key</b> = never repeat a side effect</div>
   </section>
 
-  <!-- ===== Everything inside .live is the REAL SYSTEM, polled from this server. ===== -->
+  <!-- ===== How it works: the three ideas, one line each ===== -->
+  <section>
+    <p class="eyebrow">How it works</p>
+    <div class="how">
+      <div class="card"><b>Journal</b>Every finished step is saved, so a new worker resumes instead of redoing work.</div>
+      <div class="card"><b>Idempotency key</b>A retried step can't repeat a side effect, like a refund.</div>
+      <div class="card"><b>Leases</b>If a worker dies, another one takes over automatically.</div>
+    </div>
+  </section>
+
+  <!-- ===== Part 1: the REAL runtime, polled from this server. ===== -->
   <div class="live">
+    <p class="eyebrow">Part 1</p>
     <div class="row">
-      <h2 style="margin:0">Try it on the real system</h2>
+      <h2 style="margin:0">The runtime, live</h2>
       <span id="conn" class="badge"><span class="dot"></span><span id="conn-text">LIVE · real server</span></span>
     </div>
 
@@ -263,6 +302,37 @@
       <p class="small muted">
         How to read this: <span class="pill resumed">↻ resumed</span> means a second worker finished the run after
         the first was killed. Click a row to see which attempt completed each step; click the id for the raw JSON.
+      </p>
+    </section>
+  </div>
+
+  <!-- ===== Part 2: an example app (the support agent) running on the runtime. ===== -->
+  <div class="live">
+    <p class="eyebrow">Part 2</p>
+    <h2 style="margin:0 0 6px">An AI agent built on this runtime, live</h2>
+    <p class="intro">
+      This is an example app running on the runtime: Claude reads the customer's message and writes
+      the reply, a staff member approves any refund, and every step is crash-proof.
+    </p>
+
+    <section>
+      <h2>Ask the agent</h2>
+      <textarea id="agent-input" rows="3" maxlength="300" placeholder="Write as a customer…"></textarea>
+      <div class="row small muted">
+        <span>Or try an example:</span><span id="agent-count">0/300</span>
+      </div>
+      <div class="chips">
+        <button class="chip">I was charged twice for my order, please refund me</button>
+        <button class="chip">The export button crashes</button>
+        <button class="chip">What are your hours?</button>
+      </div>
+      <button class="primary" id="btn-agent" disabled>Send to agent</button>
+      <div id="agent-msg"></div>
+
+      <ol class="timeline" id="agent-timeline"></ol>
+      <p class="small muted">
+        <span class="who claude">Claude</span> = done by the AI · <span class="who code">code</span> = plain code.
+        Every step is journaled: if a worker dies mid-way, the agent resumes without re-asking Claude.
       </p>
     </section>
   </div>
@@ -638,6 +708,159 @@ async function poll() {
   } finally {
     busy = false;
   }
+}
+
+// ===========================================================================
+// 7. Part 2: the support agent. One run at a time, polled on its own
+// setTimeout chain (every 1.5s) only while that run isn't finished.
+// Steps journaled by support_agent: classify → [require_approval → check_order
+// → issue_refund] (refund only) → draft_reply.
+// ===========================================================================
+
+// POST /demo/support {"message"} → {id}; 429 rate limit, 422 bad message
+async function sendToAgent(message) {
+  return fetch("/demo/support", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+  });
+}
+
+// POST /demo/support/{id}/decision {"approved"} → {ok}; 409 if nothing is pending
+async function decideRefund(id, approved) {
+  return fetch(`/demo/support/${id}/decision`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ approved }),
+  });
+}
+
+// FastAPI's "detail" is a string, or for 422 a list of {msg} objects.
+async function errorText(res) {
+  const body = await res.json().catch(() => ({}));
+  if (Array.isArray(body.detail)) return body.detail.map((d) => d.msg).join("; ");
+  return body.detail || "Request failed (" + res.status + ").";
+}
+
+let agentRun = null;     // id of the run shown in the timeline
+let agentTimer = null;
+
+const input = $("agent-input");
+function onInput() {
+  $("agent-count").textContent = input.value.length + "/300";
+  $("btn-agent").disabled = input.value.trim().length < 3;   // server needs ≥ 3 chars
+}
+input.oninput = onInput;
+document.querySelectorAll(".chip").forEach((c) => (c.onclick = () => { input.value = c.textContent; onInput(); }));
+
+$("btn-agent").onclick = async () => {
+  const btn = $("btn-agent");
+  btn.disabled = true;
+  $("agent-msg").textContent = "";
+  try {
+    const res = await sendToAgent(input.value.trim());
+    if (!res.ok) { $("agent-msg").textContent = await errorText(res); return; }
+    clearTimeout(agentTimer);       // stop polling any previous run
+    agentRun = (await res.json()).id;
+    renderAgent({ id: agentRun, status: "pending", steps: [], approvals: [] });
+    pollAgent(agentRun);
+  } catch {
+    $("agent-msg").textContent = "Network error, try again.";
+  } finally {
+    onInput();
+  }
+};
+
+async function pollAgent(id) {
+  if (id !== agentRun) return;      // a newer message replaced this run
+  let run = null;
+  try { run = await getRun(id); } catch { /* keep the last view; retry below */ }
+  if (id !== agentRun) return;
+  if (run) renderAgent(run);
+  if (!run || !["completed", "failed"].includes(run.status)) {
+    agentTimer = setTimeout(() => pollAgent(id), 1500);
+  }
+}
+
+let deciding = false;   // keeps Approve/Reject disabled across re-renders while the POST is in flight
+async function decide(approved) {
+  const id = agentRun;
+  deciding = true;
+  document.querySelectorAll(".approval button").forEach((b) => (b.disabled = true));
+  try {
+    const res = await decideRefund(id, approved);
+    if (!res.ok) $("agent-msg").textContent = await errorText(res);
+  } catch {
+    $("agent-msg").textContent = "Network error, try again.";
+  }
+  deciding = false;
+  clearTimeout(agentTimer);        // refresh right away instead of waiting for the next tick
+  pollAgent(id);
+}
+
+// One timeline item: a heading with a Claude/code tag, plus optional body nodes.
+function item(who, title, waiting, ...body) {
+  const li = el("li", "card"), head = el("div", "head");
+  head.append(el("span", "who " + who, who === "claude" ? "Claude" : "code"),
+              el("span", waiting ? "wait" : "", title));
+  li.append(head, ...body);
+  return li;
+}
+
+function renderAgent(run) {
+  const list = $("agent-timeline");
+  const step = (name) => run.steps.find((s) => s.name === name && s.status === "completed");
+  const items = [];
+
+  // a. Claude classified it
+  const cls = step("classify");
+  if (!cls) {
+    items.push(item("claude", "Claude is reading the message…", true));
+  } else {
+    const category = cls.output;
+    const p = el("div", "small");
+    p.append("Category: ", el("b", "", category));
+    items.push(item("claude", "Claude classified it", false, p));
+
+    // b + c. Refund path: staff approval, then the refund (or not)
+    const ap = run.approvals[0];
+    const awaitingStaff = category === "refund" && (!ap || ap.status === "pending");
+    if (category === "refund") {
+      if (!ap) {
+        items.push(item("code", "Asking a staff member to approve…", true));
+      } else if (ap.status === "pending") {
+        const card = el("li", "card approval");
+        const buttons = el("div", "actions");
+        const yes = el("button", "primary", "Approve"), no = el("button", "danger", "Reject");
+        yes.onclick = () => decide(true);
+        no.onclick = () => decide(false);
+        // Enabled only once the run is parked waiting for a human
+        if (run.status !== "waiting_approval" || deciding) { yes.disabled = no.disabled = true; }
+        buttons.append(yes, no);
+        card.append(el("div", "label", "STAFF APPROVAL"), el("div", "prompt", ap.prompt),
+                    el("p", "small muted", "You're playing the support manager (the customer can't approve their own refund)."),
+                    buttons);
+        items.push(card);
+      } else {
+        items.push(item("code", ap.status === "approved" ? "Staff approved the refund" : "Staff rejected the refund", false,
+                        el("div", "small muted", ap.prompt)));
+        if (ap.status === "rejected") items.push(item("code", "No refund", false));
+        else if (step("issue_refund")) items.push(item("code", "Refund issued (once)", false));
+        else items.push(item("code", "Issuing the refund…", true));
+      }
+    }
+
+    // d. Claude wrote the reply
+    const reply = run.output?.reply ?? step("draft_reply")?.output;
+    if (reply) items.push(item("claude", "Claude wrote the reply", false, el("blockquote", "quote", reply)));
+    else if (!awaitingStaff && run.status !== "failed") items.push(item("claude", "Claude is writing the reply…", true));
+  }
+
+  // Friendly text only; the raw error stays available via the run JSON link below.
+  if (run.status === "failed") items.push(item("code", "The agent couldn't finish this one. Try again in a moment.", false));
+
+  const link = el("a", "small mono", "raw run JSON: " + run.id.slice(0, 8));
+  link.href = "/runs/" + run.id; link.target = "_blank"; link.rel = "noopener";
+  const foot = el("li"); foot.append(link);
+  list.replaceChildren(...items, foot);
 }
 
 // Play the illustration once; with reduced motion, just show the outcome
