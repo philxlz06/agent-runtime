@@ -14,6 +14,8 @@ from fastapi import Query
 from agent_runtime.ratelimit import RateLimiter
 import os
 import secrets
+from pathlib import Path
+from fastapi.responses import FileResponse
 
 
 def require_admin(x_admin_key: str | None = Header(default=None)):
@@ -60,13 +62,21 @@ async def create_run(
 
 
 @app.get("/runs")
-async def list_runs(status: str | None = None, limit: int = 50, conn=Depends(get_conn)):
+async def list_runs(
+    status: str | None = None,
+    workflow: str | None = None,
+    limit: int = 50,
+    conn=Depends(get_conn),
+):
     cur = conn.cursor(row_factory=dict_row)
     await cur.execute(
-        "SELECT id, workflow_name, status, created_at, updated_at FROM runs "
-        "WHERE %s::text IS NULL OR status = %s "
-        "ORDER BY created_at DESC LIMIT %s",
-        (status, status, limit),
+        "SELECT r.id, r.workflow_name, r.status, r.lease_owner, r.created_at, r.updated_at, "
+        "  (SELECT count(*) FROM steps s WHERE s.run_id = r.id AND s.status = 'completed') AS steps_done "
+        "FROM runs r "
+        "WHERE (%s::text IS NULL OR r.status = %s) "
+        "  AND (%s::text IS NULL OR r.workflow_name = %s) "
+        "ORDER BY r.created_at DESC LIMIT %s",
+        (status, status, workflow, workflow, limit),
     )
     return await cur.fetchall()
 
@@ -161,3 +171,11 @@ async def demo_kill(conn=Depends(get_conn)):
         raise HTTPException(status_code=429, detail="a worker was just killed, try again soon")
     await conn.execute("INSERT INTO kill_requests DEFAULT VALUES")
     return {"queued": True}
+
+
+STATIC = Path(__file__).parent / "static"
+
+
+@app.get("/", include_in_schema=False)
+async def home():
+    return FileResponse(STATIC / "index.html")
