@@ -836,6 +836,7 @@ function renderAgent(run) {
         if (run.status !== "waiting_approval" || deciding) { yes.disabled = no.disabled = true; }
         buttons.append(yes, no);
         card.append(el("div", "label", "STAFF APPROVAL"), el("div", "prompt", ap.prompt),
+                    el("p", "small muted", "Whatever the customer asks for, the refund amount comes from our records ($25 for demo orders), never from the message or the AI. The AI can only route the request; a person decides."),
                     el("p", "small muted", "You're playing the support manager (the customer can't approve their own refund)."),
                     buttons);
         items.push(card);
