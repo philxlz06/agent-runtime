@@ -144,6 +144,28 @@ The AI agent needs `ANTHROPIC_API_KEY` in the environment; tests use a fake mode
 
 Every merge to `main` runs the test suite on GitHub Actions against a throwaway Postgres; if it passes, the deploy job SSHes into the server, rebuilds the containers, and health-checks the live site. Only Caddy's ports 80/443 are public; the API port is never exposed.
 
+
+## How I built this (and how I used AI)
+
+I built this with a lot of help from AI, and I want to be upfront about who did what.
+
+**What Claude did**
+- Proposed the overall architecture and the milestone plan
+- Explained the concepts as we went (leases, fencing, idempotency, replay)
+- Wrote most of the runtime code and tests, which I then applied step by step
+- Diagnosed most of the bugs, including the PID 1 SIGKILL issue and the deploy secret with a hidden newline
+- Generated the demo page with Claude Code, and drafted this README
+
+**What I did**
+- Applied and ran every change, ran the test suite, and worked through failures with Claude
+- Set up the infrastructure hands-on: the AWS Lightsail server, DNS, Supabase, secrets, and GitHub Actions
+- Made some of the design calls, like how the kill switch works and letting only staff approve refunds in the demo
+- Pushed back on the demo design: some changes came from my critiques, like showing that finished steps aren't redone (not just that refunds don't double)
+- Tested everything live, including killing workers in production
+
+**What I can walk through in detail:** the journal and replay, idempotency keys, leases and heartbeats, fencing tokens, approvals, the chaos benchmark, and the deployment and CI/CD pipeline.
+
+
 ## What I'd do next
 
 - **Workflow versioning:** changing a workflow's steps while runs are in flight breaks replay; tools like Temporal version workflows explicitly.
