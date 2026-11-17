@@ -35,6 +35,9 @@ jobs:
   deploy:
     name: Deploy (CD)
     needs: test
+    environment:
+      name: production
+      url: https://runtime.philx.dev
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency: deploy
