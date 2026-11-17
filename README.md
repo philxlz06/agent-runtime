@@ -6,6 +6,10 @@ Kill a worker mid-task and another one resumes from the last saved step: finishe
 **Live demo:** https://runtime.philx.dev (start runs, kill a worker, watch the run survive, and try the AI support agent)
 
 <!-- Demo video: add a 30–60 s GIF or link here -->
+<img width="1372" height="751" alt="Screenshot 2026-11-16 at 9 21 08 PM" src="https://github.com/user-attachments/assets/19b01016-fd9c-4cde-a105-8b93d29c350c" />
+<img width="1225" height="948" alt="Screenshot 2026-11-16 at 9 21 31 PM" src="https://github.com/user-attachments/assets/8eb41d43-e56b-43ba-8fc1-f1b6ae01fdd6" />
+<img width="1396" height="944" alt="Screenshot 2026-11-16 at 9 21 40 PM" src="https://github.com/user-attachments/assets/f3122c56-f56b-48e4-8272-37e7d8a6d853" />
+
 
 ---
 
