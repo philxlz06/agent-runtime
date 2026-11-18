@@ -145,25 +145,13 @@ The AI agent needs `ANTHROPIC_API_KEY` in the environment; tests use a fake mode
 Every merge to `main` runs the test suite on GitHub Actions against a throwaway Postgres; if it passes, the deploy job SSHes into the server, rebuilds the containers, and health-checks the live site. Only Caddy's ports 80/443 are public; the API port is never exposed.
 
 
-## How I built this (and how I used AI)
+## How I built this
 
-I built this with a lot of help from AI, and I want to be upfront about who did what.
+I built this with Claude as a pair programmer. Claude proposed the architecture, explained the concepts, and wrote most of the backend code. I worked through every change myself: reading it, running it, testing it, and debugging failures until I understood why it works. The demo page frontend was generated entirely by Claude Code.
 
-**What Claude did**
-- Proposed the overall architecture and the milestone plan
-- Explained the concepts as we went (leases, fencing, idempotency, replay)
-- Wrote most of the runtime code and tests, which I then applied step by step
-- Diagnosed most of the bugs, including the PID 1 SIGKILL issue and the deploy secret with a hidden newline
-- Generated the demo page with Claude Code, and drafted this README
+My own calls: the kill-switch design, staff-only refund approvals, and pushing the demo to prove resume (not just "no double refunds"). I set up and run the infrastructure: AWS Lightsail, DNS, Supabase, secrets, and CI/CD.
 
-**What I did**
-- Applied and ran every change, ran the test suite, and worked through failures with Claude
-- Set up the infrastructure hands-on: the AWS Lightsail server, DNS, Supabase, secrets, and GitHub Actions
-- Made some of the design calls, like how the kill switch works and letting only staff approve refunds in the demo
-- Pushed back on the demo design: some changes came from my critiques, like showing that finished steps aren't redone (not just that refunds don't double)
-- Tested everything live, including killing workers in production
-
-**What I can walk through in detail:** the journal and replay, idempotency keys, leases and heartbeats, fencing tokens, approvals, the chaos benchmark, and the deployment and CI/CD pipeline.
+I can walk through any part of the backend in detail: the journal and replay, idempotency keys, leases and fencing, approvals, the chaos benchmark, and the deploy pipeline.
 
 
 ## What I'd do next
