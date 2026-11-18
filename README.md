@@ -1,7 +1,7 @@
 # Agent Runtime
 
 **A Postgres-backed durable execution engine for AI agents and workflows.**
-Kill a worker mid-task and another one resumes from the last saved step: finished work is never redone, and side effects like refunds happen exactly once.
+Kill a worker mid-task and another one resumes from the last saved step: finished work is never redone, and side effects like refunds happen effectively once, via idempotency keys.
 
 **Live demo:** https://runtime.philx.dev (start runs, kill a worker, watch the run survive, and try the AI support agent)
 
