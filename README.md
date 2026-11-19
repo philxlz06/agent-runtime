@@ -160,8 +160,14 @@ I can walk through any part of the backend in detail: the journal and replay, id
 
 ## What I'd do next
 
-- **Workflow versioning:** changing a workflow's steps while runs are in flight breaks replay; tools like Temporal version workflows explicitly.
-- **`LISTEN/NOTIFY` instead of polling** to pick up new runs instantly.
-- **A stronger post-deploy smoke test** that starts a run and checks it completes, not just `/health`.
-- **Blue-green deploys** so a bad release never takes traffic.
-- **Scale limits:** a single Postgres is the coordinator; the next step would be partitioning runs across databases.
+- **Post-deploy check that a run completes.** CI only checks `/health`, which once let a worker crash loop pass a green deploy: the API was fine, the workers weren't.
+- **Stop zombie work early.** When the heartbeat finds the lease is lost, it just stops; the worker keeps going until fencing rejects its next write. Cancelling the run right away would save wasted work, like an extra LLM call.
+- **Several runs per worker.** Each worker runs one run at a time. Steps are mostly waiting on I/O, so one worker could run several at once (with a limit) instead of adding containers.
+- **Step retries with backoff.** Today a failed or timed-out step fails the whole run. Retrying temporary errors a few times would make runs more resilient.
+- **Workflow versioning.** Changing a workflow's steps while runs are in flight (say, parked for approval) breaks replay with a `NonDeterminismError`. Temporal solves this with explicit versioning.
+- **`LISTEN/NOTIFY`.** Idle workers poll every second; Postgres can notify them the instant a run is created. Polling stays as a fallback, since notifications aren't stored if nobody is listening.
+
+## Known limits
+
+- One Postgres is both the store and the coordinator; at very high throughput, the claim query would become the bottleneck.
+- Recovery takes about one lease (10 s in production). Shorter leases recover faster, but risk false expiries on a slow network.
