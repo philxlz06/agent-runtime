@@ -17,20 +17,19 @@ Kill a worker mid-task and another one resumes from the last saved step: finishe
 
 AI agents run long, multi-step tasks: call a model, call a tool, wait for a human, call another tool. If the process crashes halfway, a naive system either loses the work or **starts over**, re-running expensive LLM calls and repeating side effects (charging a card twice, sending two emails).
 
-## How it compares
-
-This is the same model as [Temporal](https://temporal.io) and [DBOS](https://www.dbos.dev): a step journal plus deterministic replay. I built it from scratch on plain Postgres to learn the mechanics (leases, fencing tokens, idempotency keys), and measured it under chaos. The design is closest to DBOS, a library on Postgres with no separate server. In production I'd reach for one of those; they add durable timers, workflow versioning, retries and a UI that this doesn't have.
-
-
 Agent Runtime makes every step **durable**:
 
 | Guarantee | How |
 |---|---|
 | **Resume, don't redo** | Every finished step's result is saved in a journal. A new worker replays saved results instead of re-running them, including LLM calls, so the agent never pays twice or changes its mind. |
-| **No duplicate side effects** | Each step gets a deterministic idempotency key (`run_id:seq`) that is passed to external services, so a retried step can't repeat a refund. |
+| **No duplicate side effects** | Each step gets a deterministic idempotency key (`run_id:seq`); steps with side effects pass it to the external service, so a retried step can't repeat a refund. |
 | **Automatic failover** | Workers hold a time-limited lease with heartbeats. If a worker dies, its lease expires and another worker takes the run over. |
 | **No zombie writes** | Each claim bumps a fencing token. A worker that was frozen and comes back can't write over the new owner's work. |
 | **Human in the loop** | A step can pause the run until a person approves. The run parks without holding a worker and resumes when the decision arrives. |
+
+## How it compares
+
+This is the same model as [Temporal](https://temporal.io) and [DBOS](https://www.dbos.dev): a step journal plus deterministic replay. I built it from scratch on plain Postgres to learn the mechanics (leases, fencing tokens, idempotency keys), and measured it under chaos. The design is closest to DBOS, a library on Postgres with no separate server. In production I'd reach for one of those; they add durable timers, workflow versioning, retries and a UI that this doesn't have.
 
 ## Results under chaos
 
@@ -46,7 +45,7 @@ A chaos script ran 4 worker processes against Postgres while randomly **SIGKILL-
 | Recovery time (2 s lease) | **p50 2.2 s · p95 3.1 s** |
 | Throughput under attack (laptop) | 5.7 runs/s |
 
-Recovery ≈ lease length + one poll; percentiles are over 896 takeovers.
+Recovery percentiles are over the 896 takeovers: time from the attack until another worker owns the run, which is about one lease (2 s here) plus one poll. Production uses a 10 s lease, so expect about 10 s there.
 
 Full method and numbers: [`bench/RESULTS.md`](bench/RESULTS.md)
 
@@ -54,13 +53,18 @@ Full method and numbers: [`bench/RESULTS.md`](bench/RESULTS.md)
 
 ```mermaid
 flowchart LR
-    U[Browser / API client] -->|HTTPS| C[Caddy]
-    C --> A[FastAPI API]
-    A <-->|runs · steps · approvals| P[(Postgres)]
-    W1[Worker 1] <-->|claim · heartbeat · journal| P
-    W2[Worker 2] <-->|claim · heartbeat · journal| P
+    U[Browser / API client] -->|HTTPS| C
+    subgraph LS["AWS Lightsail server · Docker Compose"]
+        C[Caddy<br/>HTTPS + reverse proxy] --> A[FastAPI API]
+        W1[Worker 1]
+        W2[Worker 2]
+    end
+    A <-->|runs · steps · approvals| P[(Supabase Postgres)]
+    W1 <-->|claim · heartbeat · journal| P
+    W2 <-->|claim · heartbeat · journal| P
     W1 -.->|LLM steps| L[Claude API]
     W2 -.->|LLM steps| L
+    GH[GitHub Actions] -.->|tests, then SSH deploy| LS
 ```
 
 - **Postgres is the only coordinator.** There is no separate queue or supervisor: workers claim runs with `SELECT … FOR UPDATE SKIP LOCKED`, so two workers can never take the same run.
@@ -78,9 +82,13 @@ stateDiagram-v2
     waiting_approval --> pending: human decides
     running --> completed
     running --> failed: step error or timeout
+    completed --> [*]
+    failed --> [*]
 ```
 
 ## Writing a workflow
+
+Simplified; the real version, with input tagging and output validation, is in [`src/agent_runtime/demo.py`](src/agent_runtime/demo.py).
 
 ```python
 from agent_runtime.step import step
@@ -101,7 +109,7 @@ async def support_agent(message, order_id):
     category = await classify(message)
     if category == "refund":
         if await require_approval(f"Refund $25 for order {order_id}?"):   # parks until a human decides
-            await issue_refund(order_id)                                    # exactly once, via its idempotency key
+            await issue_refund(order_id)                                    # effectively once, via its idempotency key
     return await draft_reply(message, category)
 ```
 
@@ -123,7 +131,6 @@ Interactive docs: https://runtime.philx.dev/docs
 
 Python 3.13 · asyncio · Postgres 16 · psycopg 3 (async, connection pools) · FastAPI · Docker Compose · Caddy (automatic HTTPS) · AWS Lightsail · Supabase Postgres · GitHub Actions (CI/CD) · Anthropic Claude API · pytest
 
-
 ## Run it locally
 
 **You need:** Docker (Docker Desktop or OrbStack), [uv](https://docs.astral.sh/uv/), and git. uv installs the right Python (3.13) for you.
@@ -134,9 +141,25 @@ cd agent-runtime
 export ANTHROPIC_API_KEY=sk-...    # optional: only the AI support agent needs it
 docker compose up -d --build       # Postgres + API + 2 workers (migrations run on API startup)
 ```
+
 Open http://localhost:8000. Locally, the admin key is `dev-admin-key`.
 
+Run the tests (stop the local worker first, so it doesn't claim the tests' runs):
 
+```bash
+docker compose stop api worker
+uv sync
+uv run pytest -v
+```
+
+Run the chaos benchmark (local database only; it refuses anything else):
+
+```bash
+uv run python scripts/chaos.py            # full run
+N_KILLS=50 uv run python scripts/chaos.py # quick run
+```
+
+Tests use a fake model and never call the Claude API.
 
 ## Deployment
 
