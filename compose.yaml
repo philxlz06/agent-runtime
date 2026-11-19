@@ -14,6 +14,7 @@ services:
     build: .
     environment:
       DATABASE_URL: postgresql://runtime:runtime@db:5432/runtime
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key}     # local only
     ports:
       - "8000:8000"
     depends_on:
@@ -24,6 +25,12 @@ services:
     command: ["python", "-m", "agent_runtime.worker"]
     environment:
       DATABASE_URL: postgresql://runtime:runtime@db:5432/runtime
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}           # forwarded from your shell or .env
+      DEMO_KILLS: "1"
+      LEASE_SECONDS: "10"
+    deploy:
+      replicas: 2
+    restart: unless-stopped
     depends_on:
       - db
 
