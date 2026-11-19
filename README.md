@@ -123,29 +123,20 @@ Interactive docs: https://runtime.philx.dev/docs
 
 Python 3.13 · asyncio · Postgres 16 · psycopg 3 (async, connection pools) · FastAPI · Docker Compose · Caddy (automatic HTTPS) · AWS Lightsail · Supabase Postgres · GitHub Actions (CI/CD) · Anthropic Claude API · pytest
 
+
 ## Run it locally
 
-```bash
-docker compose up -d          # Postgres + API + worker (migrations run on API startup)
-open http://localhost:8000
-```
-
-Run the tests (stop the local worker first, so it doesn't claim the tests' runs):
+**You need:** Docker (Docker Desktop or OrbStack), [uv](https://docs.astral.sh/uv/), and git. uv installs the right Python (3.13) for you.
 
 ```bash
-docker compose stop api worker
-uv sync
-uv run pytest -v
+git clone https://github.com/philxlz06/agent-runtime.git
+cd agent-runtime
+export ANTHROPIC_API_KEY=sk-...    # optional: only the AI support agent needs it
+docker compose up -d --build       # Postgres + API + 2 workers (migrations run on API startup)
 ```
+Open http://localhost:8000. Locally, the admin key is `dev-admin-key`.
 
-Run the chaos benchmark (local database only; it refuses anything else):
 
-```bash
-uv run python scripts/chaos.py            # full run
-N_KILLS=50 uv run python scripts/chaos.py # quick run
-```
-
-The AI agent needs `ANTHROPIC_API_KEY` in the environment; tests use a fake model and never call the API.
 
 ## Deployment
 
