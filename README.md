@@ -17,6 +17,11 @@ Kill a worker mid-task and another one resumes from the last saved step: finishe
 
 AI agents run long, multi-step tasks: call a model, call a tool, wait for a human, call another tool. If the process crashes halfway, a naive system either loses the work or **starts over**, re-running expensive LLM calls and repeating side effects (charging a card twice, sending two emails).
 
+## How it compares
+
+This is the same model as [Temporal](https://temporal.io) and [DBOS](https://www.dbos.dev): a step journal plus deterministic replay. I built it from scratch on plain Postgres to learn the mechanics (leases, fencing tokens, idempotency keys), and measured it under chaos. The design is closest to DBOS, a library on Postgres with no separate server. In production I'd reach for one of those; they add durable timers, workflow versioning, retries and a UI that this doesn't have.
+
+
 Agent Runtime makes every step **durable**:
 
 | Guarantee | How |
@@ -40,6 +45,8 @@ A chaos script ran 4 worker processes against Postgres while randomly **SIGKILL-
 | Takeovers | 896 |
 | Recovery time (2 s lease) | **p50 2.2 s · p95 3.1 s** |
 | Throughput under attack (laptop) | 5.7 runs/s |
+
+Recovery ≈ lease length + one poll; percentiles are over 896 takeovers.
 
 Full method and numbers: [`bench/RESULTS.md`](bench/RESULTS.md)
 
