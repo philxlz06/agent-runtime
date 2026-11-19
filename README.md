@@ -147,7 +147,13 @@ Every merge to `main` runs the test suite on GitHub Actions against a throwaway 
 
 I built this with Claude as a pair programmer. Claude proposed the architecture, explained the concepts, and wrote most of the backend code. I worked through every change myself: reading it, running it, testing it, and debugging failures until I understood why it works. The demo page frontend was generated entirely by Claude Code.
 
-My own calls: the kill-switch design, staff-only refund approvals, and pushing the demo to prove resume (not just "no double refunds"). I set up and run the infrastructure: AWS Lightsail, DNS, Supabase, secrets, and CI/CD.
+Some design calls came from my own questions while building:
+- **Step timeouts:** I asked whether a stuck worker could keep heartbeating, and it could: a hung step would hold its lease forever and never be recovered. That led to per-step timeouts.
+- **No duplicate runs:** I noticed `start_run` never checks for duplicates. Working through it, that meant a retried request could create a second run, and a second refund. That led to the `Idempotency-Key` header on `POST /runs`.
+- **Kill switch:** I specified how it had to behave (kill or freeze a worker mid-run, auto-restart, rate-limited); Claude proposed doing it through a database row so the API never touches Docker.
+- **A demo that proves resume:** I pushed back on the first demo page because it only showed "no double refunds." Now each step shows which attempt finished it, so a takeover is visible.
+
+I set up and run the infrastructure: AWS Lightsail, DNS, Supabase, secrets, and CI/CD.
 
 I can walk through any part of the backend in detail: the journal and replay, idempotency keys, leases and fencing, approvals, the chaos benchmark, and the deploy pipeline.
 
